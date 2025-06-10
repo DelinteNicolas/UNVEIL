@@ -18,7 +18,7 @@ from PyQt6.QtWidgets import (QApplication, QWidget, QHBoxLayout, QVBoxLayout,
 from dipy.io.streamline import load_tractogram
 from matplotlib import pyplot as plt
 from matplotlib.colors import LinearSegmentedColormap
-from unravel.utils import get_streamline_density
+# from unravel.utils import get_streamline_density
 # from unravel.viz import plot_trk   # We'll use our local version below
 
 
