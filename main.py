@@ -14,7 +14,7 @@ from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QAction
 from PyQt6.QtWidgets import (QApplication, QWidget, QHBoxLayout, QVBoxLayout,
                              QPushButton, QFileDialog, QCheckBox, QSlider,
-                             QLabel, QComboBox, QMainWindow)
+                             QLabel, QComboBox, QMainWindow, QLineEdit)
 from dipy.io.streamline import load_tractogram
 from matplotlib import pyplot as plt
 from matplotlib.colors import LinearSegmentedColormap
@@ -78,6 +78,7 @@ def plot_trk(trk_file, scalar=None, color_map='plasma', opacity: float = 1,
     else:
         point_size = 2
         ambient = 0
+        diffuse = 1
 
     if color_map == 'flesh':
         rgb = False
@@ -173,10 +174,15 @@ class TrkViewer(QWidget):
         control_layout.addWidget(self.colorMapLabel)
 
         self.colorMapComboBox = QComboBox()
-        self.colorMapComboBox.addItems(['plasma', 'flesh'])
+        self.colorMapComboBox.addItems(['rgb', 'flesh', 'scalar'])
         self.colorMapComboBox.currentIndexChanged.connect(
             self.update_trk_viewer)
         control_layout.addWidget(self.colorMapComboBox)
+        self.colorMapEdit = QLineEdit()
+        self.colorMapEdit.textChanged.connect(self.update_trk_viewer)
+        self.colorMapEdit.setToolTip(
+            'Insert color map name. Name must be in the matplotlib library. Scalar nii.gz must be loaded.')
+        control_layout.addWidget(self.colorMapEdit)
 
         self.showVolumeCheckbox = QCheckBox('Show Volume')
         self.showVolumeCheckbox.stateChanged.connect(self.update_nii_viewer)
@@ -272,11 +278,21 @@ class TrkViewer(QWidget):
 
         opacity = self.opacitySlider.value() / 100.0
         show_points = self.showPointsCheckbox.isChecked()
+
         color_map = self.colorMapComboBox.currentText()
+        if color_map == 'flesh':
+            color_map = 'flesh'
+            scalar = None
+        elif color_map == 'rgb':
+            color_map = 'plasma'
+            scalar = None
+        else:
+            color_map = self.colorMapEdit.text()
+            scalar = self.nii_data
 
         for file in self.names:
 
-            plot_trk(file, opacity=opacity, plotter=self.plotter,
+            plot_trk(file, opacity=opacity, plotter=self.plotter, scalar=scalar,
                      show_points=show_points, color_map=color_map,
                      name=file, background=self.background)
 
