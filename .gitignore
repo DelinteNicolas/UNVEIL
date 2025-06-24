@@ -2,5 +2,5 @@
 __pycache__
 
 stub
-.egg-info
+*.egg-info
 build
