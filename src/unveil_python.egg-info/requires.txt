@@ -1,0 +1,3 @@
+dipy
+pyvista
+PyQt6

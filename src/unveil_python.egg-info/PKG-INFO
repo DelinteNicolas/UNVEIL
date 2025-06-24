@@ -1,0 +1,21 @@
+Metadata-Version: 2.4
+Name: unveil-python
+Version: 0.0.2
+Summary: Implementation of UNVEIL
+Author-email: Nicolas Delinte <nicolas.delinte@uclouvain.be>
+Project-URL: GitHub, https://github.com/DelinteNicolas/UNVEIL
+Keywords: tractography,viewer
+Classifier: Intended Audience :: Science/Research
+Classifier: Natural Language :: English
+Classifier: Programming Language :: Python
+Description-Content-Type: text/markdown
+License-File: LICENSE
+Requires-Dist: dipy
+Requires-Dist: pyvista
+Requires-Dist: PyQt6
+Dynamic: license-file
+
+# UNVEIL
+A simple tractography viewer implemented in python.
+
+![image](https://github.com/user-attachments/assets/4fbefa7a-3fc2-446a-8835-2844266b14fa)
