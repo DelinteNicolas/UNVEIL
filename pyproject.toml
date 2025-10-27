@@ -9,6 +9,7 @@ authors = [
 ]
 readme="README.md"
 description = "Implementation of UNVEIL"
+license = "	GPL-3.0-only"
 keywords = ["tractography", "viewer"]
 classifiers = ['Intended Audience :: Science/Research',
                 'Natural Language :: English',
