@@ -508,8 +508,8 @@ class TrkViewer(QWidget):
                                   opacity=opacity, name='gii_surface',
                                   reset_camera=reset_camera)
         else:
-            # self.plotter.remove_actor('gii_surface', reset_camera=reset_camera)
-            self.plotter.actors['gii_surface'].visibility = False
+            self.plotter.remove_actor('gii_surface', reset_camera=reset_camera)
+            # self.plotter.actors['gii_surface'].visibility = False
 
 
 class MainWindow(QMainWindow):
