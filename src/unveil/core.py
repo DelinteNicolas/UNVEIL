@@ -2,13 +2,13 @@
 """
 Created on Tue Mar  4 13:03:28 2025
 
-@author: nicol
+@author: DELINTE Nicolas
 """
 import sys
 import numpy as np
 import nibabel as nib
 import pyvista as pv
-from pyvistaqt import QtInteractor  # For embedding PyVista in PyQt6
+from pyvistaqt import QtInteractor
 from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QAction
 from PyQt6.QtWidgets import (QApplication, QWidget, QHBoxLayout, QVBoxLayout,
@@ -214,6 +214,10 @@ class TrkViewer(QWidget):
         btn_screenshot = QPushButton("Screenshot")
         btn_screenshot.clicked.connect(self.take_screenshot)
         cam_layout.addWidget(btn_screenshot)
+        btn_gif = QPushButton("Create GIF")
+        btn_gif.setToolTip("This takes ~2min to save after animation end.")
+        btn_gif.clicked.connect(self.create_gif)
+        cam_layout.addWidget(btn_gif)
 
         global_layout.addLayout(cam_layout)
 
@@ -396,15 +400,51 @@ class TrkViewer(QWidget):
     def take_screenshot(self):
         """Take a screenshot of the current 3D view."""
         options = QFileDialog.Options()
-        file_path, _ = QFileDialog.getSaveFileName(
-            self,
-            "Save Screenshot",
-            "",
-            "PNG Image (*.png);;JPEG Image (*.jpg);;TIFF Image (*.tif)",
-            options=options
-        )
+        file_path, _ = QFileDialog.getSaveFileName(self, "Save Screenshot", "",
+                                                   "PNG Image (*.png);;JPEG Image (*.jpg);;TIFF Image (*.tif)",
+                                                   options=options)
         if file_path:
             self.plotter.screenshot(file_path, transparent_background=True)
+
+    def create_gif(self):
+        """Create a 360° rotation GIF of the current 3D view."""
+        options = QFileDialog.Options()
+        file_path, _ = QFileDialog.getSaveFileName(self, "Save GIF", "",
+                                                   "GIF Files (*.gif)",
+                                                   options=options)
+
+        if not file_path:
+            return
+
+        # Ensure the file has a .gif extension
+        if not file_path.lower().endswith(".gif"):
+            file_path += ".gif"
+
+        # Use an offscreen plotter so the main one remains visible
+        offscreen = pv.Plotter(
+            off_screen=True, window_size=self.plotter.window_size)
+
+        # Copy all meshes and volumes from the main plotter to the offscreen one
+        for actor_name, actor in self.plotter.actors.items():
+            offscreen.add_actor(actor.copy())
+
+        # Match background color and camera
+        offscreen.background_color = self.plotter.background_color
+        offscreen.camera_position = self.plotter.camera_position
+        offscreen.camera.SetPosition(self.plotter.camera.GetPosition())
+        offscreen.camera.SetFocalPoint(self.plotter.camera.GetFocalPoint())
+        offscreen.camera.SetViewUp(self.plotter.camera.GetViewUp())
+
+        # Create the 360° rotation GIF
+        offscreen.open_gif(file_path, fps=20)
+        n_frames = 360
+        for i in range(n_frames):
+            offscreen.camera.Azimuth(360 / n_frames)
+            offscreen.render()
+            offscreen.write_frame()
+            self.plotter.camera.azimuth += 360 / n_frames
+            self.plotter.render()
+        offscreen.close()
 
     def update_trk_viewer(self, reset_camera=False):
 
@@ -518,7 +558,7 @@ class MainWindow(QMainWindow):
         self.viewer = TrkViewer()
         self.setCentralWidget(self.viewer)
         self.initMenuBar()
-        self.setWindowTitle("Tractography Viewer with Menubar")
+        self.setWindowTitle("UNVEIL - Tractography Viewer")
 
     def initMenuBar(self):
         menubar = self.menuBar()
