@@ -27,17 +27,6 @@ def gifti_to_pyvista(gii_path):
     using the inverse of the given NIfTI affine.
     """
 
-    # Affine from MNI152 1mm template (voxel→world)
-    affine = np.array([
-        [-1.0,  0.0,  0.0,  90.0],
-        [0.0,  1.0,  0.0, -126.0],
-        [0.0,  0.0,  1.0,  -72.0],
-        [0.0,  0.0,  0.0,   1.0]
-    ])
-
-    # Compute inverse to go from world (mm) → voxel coordinates
-    inv_affine = np.linalg.inv(affine)
-
     # Load GIFTI file
     img = nib.load(gii_path)
     coords_list = img.get_arrays_from_intent('NIFTI_INTENT_POINTSET')
@@ -51,15 +40,12 @@ def gifti_to_pyvista(gii_path):
     coords_world = coords_list[0].data.astype(np.float32)
     faces = face_list[0].data.astype(np.int32)
 
-    # Transform to voxel space
-    coords_voxel = nib.affines.apply_affine(inv_affine, coords_world)
-
     # Build PyVista face array (VTK expects [3, i1, i2, i3, 3, ...])
     faces_pv = np.hstack(
         (np.full((faces.shape[0], 1), 3, dtype=np.int32), faces)).astype(np.int32)
 
     # Create PolyData mesh in voxel space
-    mesh = pv.PolyData(coords_voxel, faces_pv)
+    mesh = pv.PolyData(coords_world, faces_pv)
 
     return mesh
 
@@ -157,20 +143,23 @@ def plot_trk(trk_file, scalar=None, color_map='plasma', opacity: float = 1,
                    interpolate_before_map=False, render_lines_as_tubes=True,
                    line_width=2, point_size=point_size, rgb=rgb,
                    cmap=color_map, clim=color_lim, scalars=scalars, name=name,
-                   reset_camera=reset_camera)
+                   reset_camera=reset_camera,
+                   user_matrix=trk.affine)
 
     elif color_map == 'flesh':
         p.add_mesh(mesh, opacity=opacity, diffuse=0.4, ambient=ambient,
                    interpolate_before_map=False, render_lines_as_tubes=True,
                    line_width=2, point_size=point_size, rgb=rgb,
                    color=[250, 225, 210], name=name,
-                   reset_camera=reset_camera)
+                   reset_camera=reset_camera,
+                   user_matrix=trk.affine)
     else:
         p.add_mesh(mesh, opacity=opacity, diffuse=diffuse, ambient=ambient,
                    interpolate_before_map=False, render_lines_as_tubes=True,
                    line_width=2, point_size=point_size, rgb=rgb,
                    cmap=color_map, scalars=scalars, name=name,
-                   reset_camera=reset_camera)
+                   reset_camera=reset_camera,
+                   user_matrix=trk.affine)
 
     p.background_color = background
     # Do not call p.show() here when using an embedded interactor
@@ -342,6 +331,7 @@ class TrkViewer(QWidget):
             self.nii_file = filePath
             print(f"Loaded NIfTI file: {self.nii_file}")
             img = nib.load(filePath)
+            self.nii_affine = img.affine
             self.nii_data = img.get_fdata()
             grid = pv.ImageData()
             grid.dimensions = np.array(self.nii_data.shape) + 1
@@ -355,7 +345,7 @@ class TrkViewer(QWidget):
         self.YSlider.setMaximum(self.nii_data.shape[1])
         self.ZSlider.setMaximum(self.nii_data.shape[2])
 
-        self.update_nii_viewer(reset_camera=True)
+        self.update_nii_viewer(reset_camera=False)
 
     def loadGiftiFile(self):
         options = QFileDialog.Options()
@@ -366,7 +356,7 @@ class TrkViewer(QWidget):
             print(f"Loaded GIfTI file: {self.gii_file}")
             self.gii_mesh = gifti_to_pyvista(filePath)
 
-        self.update_gii_viewer(reset_camera=True)
+        self.update_gii_viewer(reset_camera=False)
 
     def set_background_color(self):
 
@@ -446,7 +436,7 @@ class TrkViewer(QWidget):
             self.plotter.render()
         offscreen.close()
 
-    def update_trk_viewer(self, reset_camera=False):
+    def update_trk_viewer(self, reset_camera: bool = False):
 
         opacity = self.opacitySlider.value() / 100.0
         show_points = self.showPointsCheckbox.isChecked()
@@ -481,7 +471,8 @@ class TrkViewer(QWidget):
                 self.plotter.add_mesh(slice_x, cmap='grey', name='nii_x',
                                       show_scalar_bar=False, point_size=0,
                                       render_lines_as_tubes=True,
-                                      reset_camera=False)
+                                      reset_camera=False,
+                                      user_matrix=self.nii_affine)
             else:
                 self.plotter.remove_actor('nii_x')
 
@@ -497,7 +488,8 @@ class TrkViewer(QWidget):
                 self.plotter.add_mesh(slice_y, cmap='grey', name='nii_y',
                                       show_scalar_bar=False, point_size=0,
                                       render_lines_as_tubes=True,
-                                      reset_camera=False)
+                                      reset_camera=False,
+                                      user_matrix=self.nii_affine)
             else:
                 self.plotter.remove_actor('nii_y')
 
@@ -513,11 +505,12 @@ class TrkViewer(QWidget):
                 self.plotter.add_mesh(slice_z, cmap='grey', name='nii_z',
                                       show_scalar_bar=False, point_size=0,
                                       render_lines_as_tubes=True,
-                                      reset_camera=False)
+                                      reset_camera=False,
+                                      user_matrix=self.nii_affine)
             else:
                 self.plotter.remove_actor('nii_z')
 
-    def update_nii_viewer(self, reset_camera=False):
+    def update_nii_viewer(self, reset_camera: bool = False):
 
         if self.showSlicesCheckbox.isChecked():
 
@@ -534,11 +527,12 @@ class TrkViewer(QWidget):
             opacity = self.nii_opacitySlider.value()/1000
             self.plotter.add_volume(self.grid, cmap='gray', opacity=[0, opacity],
                                     show_scalar_bar=False, name='nii_volume',
-                                    reset_camera=reset_camera)
+                                    reset_camera=reset_camera,
+                                    user_matrix=self.nii_affine)
         else:
             self.plotter.remove_actor('nii_volume', reset_camera=reset_camera)
 
-    def update_gii_viewer(self, reset_camera=False):
+    def update_gii_viewer(self, reset_camera: bool = False):
 
         if self.showSurfaceCheckbox.isChecked():
 
@@ -546,7 +540,8 @@ class TrkViewer(QWidget):
             self.plotter.add_mesh(self.gii_mesh, color="ghostwhite",
                                   culling='front', smooth_shading=True,
                                   opacity=opacity, name='gii_surface',
-                                  reset_camera=reset_camera)
+                                  reset_camera=reset_camera,
+                                  render_lines_as_tubes=True)
         else:
             self.plotter.remove_actor('gii_surface', reset_camera=reset_camera)
             # self.plotter.actors['gii_surface'].visibility = False
