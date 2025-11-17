@@ -538,7 +538,7 @@ class TrkViewer(QWidget):
 
             opacity = self.gii_opacitySlider.value()/100
             self.plotter.add_mesh(self.gii_mesh, color="ghostwhite",
-                                  culling='front', smooth_shading=True,
+                                  culling='back', smooth_shading=True,
                                   opacity=opacity, name='gii_surface',
                                   reset_camera=reset_camera,
                                   render_lines_as_tubes=True)
