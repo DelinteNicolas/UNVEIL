@@ -13,7 +13,8 @@ from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QAction
 from PyQt6.QtWidgets import (QApplication, QWidget, QHBoxLayout, QVBoxLayout,
                              QPushButton, QFileDialog, QCheckBox, QSlider,
-                             QLabel, QComboBox, QMainWindow, QLineEdit)
+                             QLabel, QComboBox, QMainWindow, QLineEdit,
+                             QDockWidget, QTreeWidget, QTreeWidgetItem)
 from dipy.io.streamline import load_tractogram
 from matplotlib import pyplot as plt
 from matplotlib.colors import LinearSegmentedColormap
@@ -173,7 +174,6 @@ class TrkViewer(QWidget):
         self.nii_data = None
         self.grid = None
         self.names = []
-        self.selected_name = None
         self.x = 0
         self.y = 0
         self.z = 0
@@ -246,9 +246,8 @@ class TrkViewer(QWidget):
             'Insert color map name. Name must be in the matplotlib library. Scalar nii.gz must be loaded.')
         control_layout.addWidget(self.colorMapEdit)
 
-        self.showVolumeCheckbox = QCheckBox('Show Volume')
-        self.showVolumeCheckbox.stateChanged.connect(self.update_nii_viewer)
-        control_layout.addWidget(self.showVolumeCheckbox)
+        self.volume_label = QLabel('Volume')
+        control_layout.addWidget(self.volume_label)
 
         self.nii_opacitySlider = QSlider(Qt.Orientation.Horizontal, self)
         self.nii_opacitySlider.setMinimum(0)
@@ -261,27 +260,24 @@ class TrkViewer(QWidget):
         self.showSlicesCheckbox.stateChanged.connect(self.update_nii_viewer)
         control_layout.addWidget(self.showSlicesCheckbox)
 
-        self.showXCheckbox = QCheckBox('X')
-        self.showXCheckbox.stateChanged.connect(self._update_nii_x)
-        control_layout.addWidget(self.showXCheckbox)
+        self.x_label = QLabel('X')
+        control_layout.addWidget(self.x_label)
         self.XSlider = QSlider(Qt.Orientation.Horizontal, self)
         self.XSlider.setMinimum(0)
         self.XSlider.setMaximum(100)
         self.XSlider.setValue(100)
         self.XSlider.sliderReleased.connect(self._update_nii_x)
         control_layout.addWidget(self.XSlider)
-        self.showYCheckbox = QCheckBox('Y')
-        self.showYCheckbox.stateChanged.connect(self._update_nii_y)
-        control_layout.addWidget(self.showYCheckbox)
+        self.y_label = QLabel('Y')
+        control_layout.addWidget(self.y_label)
         self.YSlider = QSlider(Qt.Orientation.Horizontal, self)
         self.YSlider.setMinimum(0)
         self.YSlider.setMaximum(100)
         self.YSlider.setValue(100)
         self.YSlider.sliderReleased.connect(self._update_nii_y)
         control_layout.addWidget(self.YSlider)
-        self.showZCheckbox = QCheckBox('Z')
-        self.showZCheckbox.stateChanged.connect(self._update_nii_z)
-        control_layout.addWidget(self.showZCheckbox)
+        self.z_label = QLabel('Z')
+        control_layout.addWidget(self.z_label)
         self.ZSlider = QSlider(Qt.Orientation.Horizontal, self)
         self.ZSlider.setMinimum(0)
         self.ZSlider.setMaximum(100)
@@ -290,9 +286,8 @@ class TrkViewer(QWidget):
         control_layout.addWidget(self.ZSlider)
 
         # Gifti
-        self.showSurfaceCheckbox = QCheckBox('Show Surface')
-        self.showSurfaceCheckbox.stateChanged.connect(self.update_gii_viewer)
-        control_layout.addWidget(self.showSurfaceCheckbox)
+        self.surface_label = QLabel('Surface')
+        control_layout.addWidget(self.surface_label)
 
         self.gii_opacitySlider = QSlider(Qt.Orientation.Horizontal, self)
         self.gii_opacitySlider.setMinimum(0)
@@ -313,15 +308,19 @@ class TrkViewer(QWidget):
 
     def loadTrkFile(self):
         options = QFileDialog.Options()
-        filePath, _ = QFileDialog.getOpenFileName(
-            self, "Open TRK File", "", "Tractography Files (*.trk)", options=options)
-        if filePath:
-            self.trk_file = filePath
+        filePaths, _ = QFileDialog.getOpenFileNames(self, "Open TRK Files", "",
+                                                    "Tractography Files (*.trk)",
+                                                    options=options)
+        if not filePaths:
+            return
+
+        for trk_path in filePaths:
+            self.trk_file = trk_path
             print(f"Loaded TRK file: {self.trk_file}")
             self.names.append(self.trk_file)
-            self.selected_name = self.trk_file
 
         self.update_trk_viewer(reset_camera=True)
+        self.parent().refreshActorList()
 
     def loadNiftiFile(self):
         options = QFileDialog.Options()
@@ -335,9 +334,6 @@ class TrkViewer(QWidget):
             self.nii_data = img.get_fdata()
             grid = pv.ImageData()
             grid.dimensions = np.array(self.nii_data.shape) + 1
-            # World coordinates
-            # grid.origin = img.affine[:3, 3]
-            # grid.spacing = np.diag(img.affine)[:3]
             grid.cell_data['values'] = self.nii_data.flatten(order='F')
             self.grid = grid
 
@@ -346,6 +342,44 @@ class TrkViewer(QWidget):
         self.ZSlider.setMaximum(self.nii_data.shape[2])
 
         self.update_nii_viewer(reset_camera=False)
+        self.parent().refreshActorList()
+
+    def loadROIFile(self):
+        """Load one or multiple ROI nifti volumes and render as surfaces."""
+        options = QFileDialog.Options()
+        filePaths, _ = QFileDialog.getOpenFileNames(self, "Open ROI Files", "",
+                                                    "Nifti Files (*.nii *.nii.gz)",
+                                                    options=options)
+
+        if not filePaths:
+            return
+
+        for roi_path in filePaths:
+            img = nib.load(roi_path)
+            roi = img.get_fdata()
+            affine = img.affine
+
+            datapv = pv.wrap(roi)
+            datapv.cell_data['labels'] = roi[:-1, :-1, :-1].flatten(order='F')
+            vol = datapv.threshold(value=1, scalars='labels')
+            mesh = vol.extract_surface()
+
+            smooth = mesh.smooth_taubin(n_iter=12)
+
+            actor_name = f"roi_{roi_path.split('/')[-1]}"
+
+            self.plotter.add_mesh(
+                smooth,
+                name=actor_name,
+                opacity=1,
+                color="white",
+                user_matrix=affine,
+                reset_camera=False,
+                point_size=0,
+                render_lines_as_tubes=True,
+            )
+
+            self.parent().refreshActorList()
 
     def loadGiftiFile(self):
         options = QFileDialog.Options()
@@ -357,6 +391,7 @@ class TrkViewer(QWidget):
             self.gii_mesh = gifti_to_pyvista(filePath)
 
         self.update_gii_viewer(reset_camera=False)
+        self.parent().refreshActorList()
 
     def set_background_color(self):
 
@@ -466,15 +501,14 @@ class TrkViewer(QWidget):
             center = (self.XSlider.value(),
                       self.YSlider.value(), self.ZSlider.value())
 
-            if self.showXCheckbox.isChecked():
-                slice_x = self.grid.slice('x', center)
-                self.plotter.add_mesh(slice_x, cmap='grey', name='nii_x',
-                                      show_scalar_bar=False, point_size=0,
-                                      render_lines_as_tubes=True,
-                                      reset_camera=False,
-                                      user_matrix=self.nii_affine)
-            else:
-                self.plotter.remove_actor('nii_x')
+            slice_x = self.grid.slice('x', center)
+            self.plotter.add_mesh(slice_x, cmap='grey', name='nii_x',
+                                  show_scalar_bar=False, point_size=0,
+                                  render_lines_as_tubes=True,
+                                  reset_camera=False,
+                                  user_matrix=self.nii_affine)
+        else:
+            self.plotter.remove_actor('nii_x')
 
     def _update_nii_y(self):
 
@@ -483,15 +517,14 @@ class TrkViewer(QWidget):
             center = (self.XSlider.value(),
                       self.YSlider.value(), self.ZSlider.value())
 
-            if self.showYCheckbox.isChecked():
-                slice_y = self.grid.slice('y', center)
-                self.plotter.add_mesh(slice_y, cmap='grey', name='nii_y',
-                                      show_scalar_bar=False, point_size=0,
-                                      render_lines_as_tubes=True,
-                                      reset_camera=False,
-                                      user_matrix=self.nii_affine)
-            else:
-                self.plotter.remove_actor('nii_y')
+            slice_y = self.grid.slice('y', center)
+            self.plotter.add_mesh(slice_y, cmap='grey', name='nii_y',
+                                  show_scalar_bar=False, point_size=0,
+                                  render_lines_as_tubes=True,
+                                  reset_camera=False,
+                                  user_matrix=self.nii_affine)
+        else:
+            self.plotter.remove_actor('nii_y')
 
     def _update_nii_z(self):
 
@@ -500,51 +533,35 @@ class TrkViewer(QWidget):
             center = (self.XSlider.value(),
                       self.YSlider.value(), self.ZSlider.value())
 
-            if self.showZCheckbox.isChecked():
-                slice_z = self.grid.slice('z', center)
-                self.plotter.add_mesh(slice_z, cmap='grey', name='nii_z',
-                                      show_scalar_bar=False, point_size=0,
-                                      render_lines_as_tubes=True,
-                                      reset_camera=False,
-                                      user_matrix=self.nii_affine)
-            else:
-                self.plotter.remove_actor('nii_z')
+            slice_z = self.grid.slice('z', center)
+            self.plotter.add_mesh(slice_z, cmap='grey', name='nii_z',
+                                  show_scalar_bar=False, point_size=0,
+                                  render_lines_as_tubes=True,
+                                  reset_camera=False,
+                                  user_matrix=self.nii_affine)
+        else:
+            self.plotter.remove_actor('nii_z')
 
     def update_nii_viewer(self, reset_camera: bool = False):
 
-        if self.showSlicesCheckbox.isChecked():
+        self._update_nii_x()
+        self._update_nii_y()
+        self._update_nii_z()
 
-            self._update_nii_x()
-            self._update_nii_y()
-            self._update_nii_z()
-
-        else:
-            self.plotter.remove_actor('nii_x')
-            self.plotter.remove_actor('nii_y')
-            self.plotter.remove_actor('nii_z')
-
-        if self.showVolumeCheckbox.isChecked():
-            opacity = self.nii_opacitySlider.value()/1000
-            self.plotter.add_volume(self.grid, cmap='gray', opacity=[0, opacity],
-                                    show_scalar_bar=False, name='nii_volume',
-                                    reset_camera=reset_camera,
-                                    user_matrix=self.nii_affine)
-        else:
-            self.plotter.remove_actor('nii_volume', reset_camera=reset_camera)
+        opacity = self.nii_opacitySlider.value()/1000
+        self.plotter.add_volume(self.grid, cmap='gray', opacity=[0, opacity],
+                                show_scalar_bar=False, name='nii_volume',
+                                reset_camera=reset_camera,
+                                user_matrix=self.nii_affine)
 
     def update_gii_viewer(self, reset_camera: bool = False):
 
-        if self.showSurfaceCheckbox.isChecked():
-
-            opacity = self.gii_opacitySlider.value()/100
-            self.plotter.add_mesh(self.gii_mesh, color="ghostwhite",
-                                  culling='back', smooth_shading=True,
-                                  opacity=opacity, name='gii_surface',
-                                  reset_camera=reset_camera,
-                                  render_lines_as_tubes=True)
-        else:
-            self.plotter.remove_actor('gii_surface', reset_camera=reset_camera)
-            # self.plotter.actors['gii_surface'].visibility = False
+        opacity = self.gii_opacitySlider.value()/100
+        self.plotter.add_mesh(self.gii_mesh, color="ghostwhite",
+                              culling='back', smooth_shading=True,
+                              opacity=opacity, name='gii_surface',
+                              reset_camera=reset_camera, point_size=0,
+                              render_lines_as_tubes=True,)
 
 
 class MainWindow(QMainWindow):
@@ -552,6 +569,7 @@ class MainWindow(QMainWindow):
         super().__init__()
         self.viewer = TrkViewer()
         self.setCentralWidget(self.viewer)
+        self.initActorDock()
         self.initMenuBar()
         self.setWindowTitle("UNVEIL - Tractography Viewer")
 
@@ -576,16 +594,104 @@ class MainWindow(QMainWindow):
         loadGiftiAction.triggered.connect(self.viewer.loadGiftiFile)
         fileMenu.addAction(loadGiftiAction)
 
+        # Load ROIs
+        loadROIAction = QAction('Load ROIs (.nii/.nii.gz)', self)
+        loadROIAction.triggered.connect(self.viewer.loadROIFile)
+        fileMenu.addAction(loadROIAction)
+
         # Optional: Exit action
         exitAction = QAction('Exit', self)
         exitAction.triggered.connect(self.close)
         fileMenu.addAction(exitAction)
 
         # View menu
-        fileMenu = menubar.addMenu('View')
+        viewMenu = menubar.addMenu('View')
         setBackColorAction = QAction('Background Color', self)
         setBackColorAction.triggered.connect(self.viewer.set_background_color)
-        fileMenu.addAction(setBackColorAction)
+        viewMenu.addAction(setBackColorAction)
+        toggleActorListAction = QAction(
+            "Toggle Actor List", self, checkable=True)
+        toggleActorListAction.triggered.connect(self.toggleActorDock)
+        viewMenu.addAction(toggleActorListAction)
+
+    def initActorDock(self):
+        self.actorDock = QDockWidget("Scene Actors", self)
+        self.actorDock.setAllowedAreas(Qt.DockWidgetArea.RightDockWidgetArea)
+
+        self.actorTree = QTreeWidget()
+        self.actorTree.setHeaderLabels(["Actor", "Visible"])
+        self.actorTree.setColumnCount(2)
+        self.actorTree.setColumnWidth(0, 200)
+
+        self.actorDock.setWidget(self.actorTree)
+        self.addDockWidget(
+            Qt.DockWidgetArea.RightDockWidgetArea, self.actorDock)
+
+        self.actorDock.hide()  # start hidden
+
+        # Refresh the list whenever actors change
+        self.viewer.plotter.mesh_added_callback = self.refreshActorList
+        self.viewer.plotter.mesh_removed_callback = self.refreshActorList
+
+    def toggleActorDock(self, checked):
+        if checked:
+
+            self.actorDock.show()
+        else:
+            self.actorDock.hide()
+
+    def refreshActorList(self):
+        """Rebuild the hierarchical actor list grouped by class."""
+        self.actorTree.clear()
+
+        # Groups
+        group_trk = QTreeWidgetItem(["TRK", ""])
+        group_nii = QTreeWidgetItem(["NIfTI Volume", ""])
+        group_roi = QTreeWidgetItem(["ROI Surfaces", ""])
+        group_gii = QTreeWidgetItem(["GIFTI", ""])
+
+        self.actorTree.addTopLevelItem(group_trk)
+        self.actorTree.addTopLevelItem(group_nii)
+        self.actorTree.addTopLevelItem(group_gii)
+        self.actorTree.addTopLevelItem(group_roi)
+        # Loop through PyVista actors
+        for name, actor in self.viewer.plotter.actors.items():
+            item = QTreeWidgetItem([name, ""])
+            item.setCheckState(
+                1, Qt.CheckState.Checked if actor.GetVisibility() else Qt.CheckState.Unchecked)
+
+            # Store name for callback
+            item.actor_name = name
+
+            # Insert into the correct group
+            if name.endswith(".trk"):
+                group_trk.addChild(item)
+            elif name.startswith("nii_"):
+                group_nii.addChild(item)
+            elif name.startswith("gii_"):
+                group_gii.addChild(item)
+            elif name.startswith("roi_"):
+                group_roi.addChild(item)
+            else:
+                group_trk.addChild(item)  # default bucket
+
+        # Connect visibility toggles
+        self.actorTree.itemChanged.connect(self.onActorVisibilityChanged)
+
+    def onActorVisibilityChanged(self, item, column):
+        """Toggle visibility when user clicks checkbox."""
+        if column != 1:
+            return
+
+        actor_name = item.actor_name
+        visible = item.checkState(1) == Qt.CheckState.Checked
+
+        try:
+            self.viewer.plotter.actors[actor_name].SetVisibility(visible)
+        except KeyError:
+            pass
+
+        self.viewer.plotter.render()
 
 
 if __name__ == '__main__':
