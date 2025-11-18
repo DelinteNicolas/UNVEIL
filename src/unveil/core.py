@@ -179,6 +179,7 @@ class TrkViewer(QWidget):
         self.z = 0
         self.initUI()
         self.background = 'white'
+        self.flicker = False
 
     def initUI(self):
         # Create the main layout
@@ -403,24 +404,24 @@ class TrkViewer(QWidget):
         self.plotter.background_color = self.background
 
     def view_isometric(self):
-        # equivalent to BackgroundPlotter 'iso' camera position
         self.plotter.view_isometric()
-        self.plotter.render()
+        self.plotter.camera.azimuth += self.flicker*180
+        self.flicker = not self.flicker
 
     def view_xy(self):
-        # view from +Z axis, XY plane (axial)
-        self.plotter.view_xy()   # pyvista method
-        self.plotter.render()
+        self.plotter.view_xy()
+        self.plotter.camera.azimuth += self.flicker*180
+        self.flicker = not self.flicker
 
     def view_xz(self):
-        # view from +Y axis, XZ plane (sagittal)
         self.plotter.view_xz()
-        self.plotter.render()
+        self.plotter.camera.azimuth += self.flicker*180
+        self.flicker = not self.flicker
 
     def view_yz(self):
-        # view from +X axis, YZ plane (coronal)
         self.plotter.view_yz()
-        self.plotter.render()
+        self.plotter.camera.azimuth += self.flicker*180
+        self.flicker = not self.flicker
 
     def take_screenshot(self):
         """Take a screenshot of the current 3D view."""
@@ -451,7 +452,7 @@ class TrkViewer(QWidget):
 
         # Copy all meshes and volumes from the main plotter to the offscreen one
         for actor_name, actor in self.plotter.actors.items():
-            offscreen.add_actor(actor.copy())
+            offscreen.add_actor(actor)
 
         # Match background color and camera
         offscreen.background_color = self.plotter.background_color
