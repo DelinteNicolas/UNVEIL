@@ -19,7 +19,6 @@ from dipy.io.streamline import load_tractogram
 from matplotlib import pyplot as plt
 from matplotlib.colors import LinearSegmentedColormap
 # from unravel.utils import get_streamline_density
-# from unravel.viz import plot_trk   # We'll use our local version below
 
 
 def gifti_to_pyvista(gii_path):
@@ -51,9 +50,28 @@ def gifti_to_pyvista(gii_path):
     return mesh
 
 
+def convert_rgb_array_to_new_basis(rgb_array):
+    """
+    Converts an array of RGB colors shape [n, 3] into a new basis.
+
+    rgb_array: numpy array of shape (n, 3) where each row is [R, G, B]
+    Returns: numpy array of shape (n, 3) where each row is [newR, newG, newB]
+    """
+
+    # Based on the Color-Blind Safe IBM Design Library Color Palette
+    C1 = np.array([220, 38, 127])
+    C2 = np.array([255, 176, 0])
+    C3 = np.array([120, 94, 240])
+
+    B = np.column_stack([C1, C2, C3])
+    new_rgb = rgb_array.dot(B.T)
+
+    return new_rgb
+
+
 def plot_trk(trk_file, scalar=None, color_map='plasma', opacity: float = 1,
              show_points: bool = False, background: str = 'black', plotter=None,
-             name=None, reset_camera=False):
+             name=None, reset_camera=False, color_blind: bool = False):
     '''
     3D render for .trk files.
 
@@ -115,10 +133,12 @@ def plot_trk(trk_file, scalar=None, color_map='plasma', opacity: float = 1,
         point = streamlines._data
         next_point = np.roll(point, -1, axis=0)
         vs = next_point-point
+        ends = (streamlines._offsets+streamlines._lengths-1)
+        if color_blind:
+            vs = convert_rgb_array_to_new_basis(np.abs(vs))
         norm = np.linalg.norm(vs, axis=1)
         norm = np.stack((norm,)*3, axis=1, dtype=np.float32)
         norm = np.divide(vs, norm, dtype=np.float64)
-        ends = (streamlines._offsets+streamlines._lengths-1)
         norm[ends, :] = norm[ends-1, :]
         scalars = np.abs(norm)
         rgb = True
@@ -144,26 +164,22 @@ def plot_trk(trk_file, scalar=None, color_map='plasma', opacity: float = 1,
                    interpolate_before_map=False, render_lines_as_tubes=True,
                    line_width=2, point_size=point_size, rgb=rgb,
                    cmap=color_map, clim=color_lim, scalars=scalars, name=name,
-                   reset_camera=reset_camera,
-                   user_matrix=trk.affine)
+                   reset_camera=reset_camera, user_matrix=trk.affine)
 
     elif color_map == 'flesh':
         p.add_mesh(mesh, opacity=opacity, diffuse=0.4, ambient=ambient,
                    interpolate_before_map=False, render_lines_as_tubes=True,
                    line_width=2, point_size=point_size, rgb=rgb,
                    color=[250, 225, 210], name=name,
-                   reset_camera=reset_camera,
-                   user_matrix=trk.affine)
+                   reset_camera=reset_camera, user_matrix=trk.affine)
     else:
         p.add_mesh(mesh, opacity=opacity, diffuse=diffuse, ambient=ambient,
                    interpolate_before_map=False, render_lines_as_tubes=True,
                    line_width=2, point_size=point_size, rgb=rgb,
                    cmap=color_map, scalars=scalars, name=name,
-                   reset_camera=reset_camera,
-                   user_matrix=trk.affine)
+                   reset_camera=reset_camera, user_matrix=trk.affine)
 
     p.background_color = background
-    # Do not call p.show() here when using an embedded interactor
 
 
 class TrkViewer(QWidget):
@@ -179,6 +195,7 @@ class TrkViewer(QWidget):
         self.z = 0
         self.initUI()
         self.background = 'white'
+        self.color_blind = False
         self.flicker = False
 
     def initUI(self):
@@ -358,7 +375,6 @@ class TrkViewer(QWidget):
         for roi_path in filePaths:
             img = nib.load(roi_path)
             roi = img.get_fdata()
-            affine = img.affine
 
             datapv = pv.wrap(roi)
             datapv.cell_data['labels'] = roi[:-1, :-1, :-1].flatten(order='F')
@@ -369,16 +385,10 @@ class TrkViewer(QWidget):
 
             actor_name = f"roi_{roi_path.split('/')[-1]}"
 
-            self.plotter.add_mesh(
-                smooth,
-                name=actor_name,
-                opacity=1,
-                color="white",
-                user_matrix=affine,
-                reset_camera=False,
-                point_size=0,
-                render_lines_as_tubes=True,
-            )
+            self.plotter.add_mesh(smooth, name=actor_name, opacity=1,
+                                  color="white", user_matrix=img.affine,
+                                  reset_camera=False, point_size=0,
+                                  render_lines_as_tubes=True)
 
             self.parent().refreshActorList()
 
@@ -402,6 +412,11 @@ class TrkViewer(QWidget):
             self.background = 'white'
 
         self.plotter.background_color = self.background
+
+    def toggleColorBlind(self):
+
+        self.color_blind = not self.color_blind
+        self.update_trk_viewer()
 
     def view_isometric(self):
         self.plotter.view_isometric()
@@ -493,7 +508,7 @@ class TrkViewer(QWidget):
             plot_trk(file, opacity=opacity, plotter=self.plotter, scalar=scalar,
                      show_points=show_points, color_map=color_map,
                      name=file, background=self.background,
-                     reset_camera=reset_camera)
+                     reset_camera=reset_camera, color_blind=self.color_blind)
 
     def _update_nii_x(self):
 
@@ -610,10 +625,14 @@ class MainWindow(QMainWindow):
         setBackColorAction = QAction('Background Color', self)
         setBackColorAction.triggered.connect(self.viewer.set_background_color)
         viewMenu.addAction(setBackColorAction)
-        toggleActorListAction = QAction(
-            "Toggle Actor List", self, checkable=True)
+        toggleActorListAction = QAction("Toggle Actor List", self,
+                                        checkable=True)
         toggleActorListAction.triggered.connect(self.toggleActorDock)
         viewMenu.addAction(toggleActorListAction)
+        toggleColorBlindAction = QAction("Use color-blind colors", self,
+                                         checkable=True)
+        toggleColorBlindAction.triggered.connect(self.viewer.toggleColorBlind)
+        viewMenu.addAction(toggleColorBlindAction)
 
     def initActorDock(self):
         self.actorDock = QDockWidget("Scene Actors", self)
