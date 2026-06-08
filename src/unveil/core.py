@@ -10,11 +10,12 @@ import nibabel as nib
 import pyvista as pv
 from pyvistaqt import QtInteractor
 from PyQt6.QtCore import Qt
-from PyQt6.QtGui import QAction
 from PyQt6.QtWidgets import (QApplication, QWidget, QHBoxLayout, QVBoxLayout,
                              QPushButton, QFileDialog, QCheckBox, QSlider,
                              QLabel, QComboBox, QMainWindow, QLineEdit,
-                             QDockWidget, QTreeWidget, QTreeWidgetItem)
+                             QDockWidget, QTreeWidget, QTreeWidgetItem,
+                             QColorDialog)
+from PyQt6.QtGui import QAction, QColor
 from dipy.io.streamline import load_tractogram
 from matplotlib import pyplot as plt
 from matplotlib.colors import LinearSegmentedColormap
@@ -197,6 +198,7 @@ class TrkViewer(QWidget):
         self.background = 'white'
         self.color_blind = False
         self.flicker = False
+        self.roi_colors = {}
 
     def initUI(self):
         # Create the main layout
@@ -385,8 +387,12 @@ class TrkViewer(QWidget):
 
             actor_name = f"roi_{roi_path.split('/')[-1]}"
 
+            default_color = np.array([0, 0, 0])
+
+            self.roi_colors[actor_name] = default_color
+
             self.plotter.add_mesh(smooth, name=actor_name, opacity=1,
-                                  color="white", user_matrix=img.affine,
+                                  color=default_color, user_matrix=img.affine,
                                   reset_camera=False, point_size=0,
                                   render_lines_as_tubes=True)
 
@@ -639,9 +645,13 @@ class MainWindow(QMainWindow):
         self.actorDock.setAllowedAreas(Qt.DockWidgetArea.RightDockWidgetArea)
 
         self.actorTree = QTreeWidget()
-        self.actorTree.setHeaderLabels(["Actor", "Visible"])
-        self.actorTree.setColumnCount(2)
-        self.actorTree.setColumnWidth(0, 200)
+
+        self.actorTree.setHeaderLabels(["Visible", "Color", "Actor"])
+        self.actorTree.setColumnCount(3)
+
+        self.actorTree.setColumnWidth(0, 70)
+        self.actorTree.setColumnWidth(1, 60)
+        self.actorTree.setColumnWidth(2, 220)
 
         self.actorDock.setWidget(self.actorTree)
         self.addDockWidget(
@@ -653,9 +663,10 @@ class MainWindow(QMainWindow):
         self.viewer.plotter.mesh_added_callback = self.refreshActorList
         self.viewer.plotter.mesh_removed_callback = self.refreshActorList
 
+        self.actorTree.itemDoubleClicked.connect(self.changeActorColor)
+
     def toggleActorDock(self, checked):
         if checked:
-
             self.actorDock.show()
         else:
             self.actorDock.hide()
@@ -676,12 +687,22 @@ class MainWindow(QMainWindow):
         self.actorTree.addTopLevelItem(group_roi)
         # Loop through PyVista actors
         for name, actor in self.viewer.plotter.actors.items():
-            item = QTreeWidgetItem([name, ""])
-            item.setCheckState(
-                1, Qt.CheckState.Checked if actor.GetVisibility() else Qt.CheckState.Unchecked)
+
+            item = QTreeWidgetItem(["", "", name])
+
+            item.setCheckState(0, Qt.CheckState.Checked if actor.GetVisibility()
+                               else Qt.CheckState.Unchecked)
 
             # Store name for callback
             item.actor_name = name
+
+            if name.startswith("roi_"):
+
+                rgb = self.viewer.roi_colors.get(name, (1, 1, 1))
+
+                qcolor = QColor(int(rgb[0] * 255), int(rgb[1] * 255),
+                                int(rgb[2] * 255))
+                item.setBackground(1, qcolor)
 
             # Insert into the correct group
             if name.endswith(".trk"):
@@ -700,11 +721,11 @@ class MainWindow(QMainWindow):
 
     def onActorVisibilityChanged(self, item, column):
         """Toggle visibility when user clicks checkbox."""
-        if column != 1:
+        if column != 0:
             return
 
         actor_name = item.actor_name
-        visible = item.checkState(1) == Qt.CheckState.Checked
+        visible = item.checkState(0) == Qt.CheckState.Checked
 
         try:
             self.viewer.plotter.actors[actor_name].SetVisibility(visible)
@@ -712,6 +733,44 @@ class MainWindow(QMainWindow):
             pass
 
         self.viewer.plotter.render()
+
+    def changeActorColor(self, item, column):
+
+        if column != 1:
+            return
+
+        actor_name = getattr(item, "actor_name", None)
+
+        if actor_name is None:
+            return
+
+        if not actor_name.startswith("roi_"):
+            return
+
+        color = QColorDialog.getColor()
+
+        if not color.isValid():
+            return
+
+        rgb = (
+            color.red() / 255,
+            color.green() / 255,
+            color.blue() / 255
+        )
+
+        self.viewer.roi_colors[actor_name] = rgb
+
+        item.setBackground(1, color)
+
+        try:
+            actor = self.viewer.plotter.actors[actor_name]
+
+            actor.GetProperty().SetColor(*rgb)
+
+            self.viewer.plotter.render()
+
+        except Exception:
+            pass
 
 
 if __name__ == '__main__':
