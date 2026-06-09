@@ -590,18 +590,21 @@ class OrthogonalViewer(QWidget):
 
         layout.addWidget(self.canvas)
 
-        self.slice_slider = QSlider(Qt.Orientation.Horizontal)
-        self.slice_slider.valueChanged.connect(self.update_views)
+        self.x = 0
+        self.y = 0
+        self.z = 0
 
-        layout.addWidget(self.slice_slider)
+        self.canvas.mpl_connect("scroll_event", self.on_scroll)
+        self.canvas.mpl_connect("button_press_event", self.on_click)
 
     def set_volume(self, volume, affine=None):
 
         self.volume = volume
         self.affine = affine
 
-        self.slice_slider.setMaximum(volume.shape[2]-1)
-        self.slice_slider.setValue(volume.shape[2]//2)
+        self.x = volume.shape[0] // 2
+        self.y = volume.shape[1] // 2
+        self.z = volume.shape[2] // 2
 
         self.update_views()
 
@@ -628,10 +631,9 @@ class OrthogonalViewer(QWidget):
         if self.volume is None:
             return
 
-        z = self.slice_slider.value()
-
-        x = self.volume.shape[0]//2
-        y = self.volume.shape[1]//2
+        x = self.x
+        y = self.y
+        z = self.z
 
         axial = self.volume[:, :, z]
         coronal = self.volume[:, y, :]
@@ -644,9 +646,9 @@ class OrthogonalViewer(QWidget):
         for ax in (self.ax_axial, self.ax_coronal, self.ax_sagittal):
             ax.axis("off")
 
-        self.ax_axial.imshow(np.rot90(axial), cmap="gray")
-        self.ax_coronal.imshow(np.rot90(coronal), cmap="gray")
-        self.ax_sagittal.imshow(np.rot90(sagittal), cmap="gray")
+        self.ax_axial.imshow(np.rot90(axial), cmap="gray", vmin=0)
+        self.ax_coronal.imshow(np.rot90(coronal), cmap="gray", vmin=0)
+        self.ax_sagittal.imshow(np.rot90(sagittal), cmap="gray", vmin=0)
 
         for name, roi_info in self.rois.items():
 
@@ -661,6 +663,14 @@ class OrthogonalViewer(QWidget):
             self.draw_roi(self.ax_sagittal, np.rot90(roi[x, :, :]), color)
 
         self.canvas.draw_idle()
+
+        # self.window().viewer.XSlider.setValue(self.x)
+        # self.window().viewer.YSlider.setValue(self.y)
+        # self.window().viewer.ZSlider.setValue(self.z)
+
+        # self.window().viewer._update_slice('x', 'nii_x')
+        # self.window().viewer._update_slice('y', 'nii_y')
+        # self.window().viewer._update_slice('z', 'nii_z')
 
     def take_screenshot(self):
 
@@ -692,6 +702,61 @@ class OrthogonalViewer(QWidget):
             ax.set_facecolor(color)
 
         self.canvas.draw_idle()
+
+    def on_scroll(self, event):
+
+        if self.volume is None:
+            return
+
+        step = 1 if event.button == "up" else -1
+
+        if event.inaxes == self.ax_axial:
+
+            self.z = np.clip(self.z + step, 0, self.volume.shape[2]-1)
+
+        elif event.inaxes == self.ax_coronal:
+
+            self.y = np.clip(self.y + step, 0, self.volume.shape[1]-1)
+
+        elif event.inaxes == self.ax_sagittal:
+
+            self.x = np.clip(self.x + step, 0, self.volume.shape[0]-1)
+
+        self.update_views()
+
+    def on_click(self, event):
+
+        if self.volume is None:
+            return
+
+        if event.inaxes is None:
+            return
+
+        if event.xdata is None or event.ydata is None:
+            return
+
+        col = int(round(event.xdata))
+        row = int(round(event.ydata))
+
+        if event.inaxes == self.ax_axial:
+
+            self.x = np.clip(col, 0, self.volume.shape[0]-1)
+            self.y = np.clip(
+                self.volume.shape[1]-1-row, 0, self.volume.shape[1]-1)
+
+        elif event.inaxes == self.ax_coronal:
+
+            self.x = np.clip(col, 0, self.volume.shape[0]-1)
+            self.z = np.clip(
+                self.volume.shape[2]-1-row, 0, self.volume.shape[2]-1)
+
+        elif event.inaxes == self.ax_sagittal:
+
+            self.y = np.clip(col, 0, self.volume.shape[1]-1)
+            self.z = np.clip(
+                self.volume.shape[2]-1-row, 0, self.volume.shape[2]-1)
+
+        self.update_views()
 
 
 class MainWindow(QMainWindow):
