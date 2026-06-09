@@ -639,6 +639,9 @@ class MainWindow(QMainWindow):
 
         self.actorTree.itemDoubleClicked.connect(self.changeActorColor)
 
+        # Connect visibility toggles
+        self.actorTree.itemChanged.connect(self.onActorVisibilityChanged)
+
     def toggleActorDock(self, checked):
         if checked:
             self.actorDock.show()
@@ -689,9 +692,6 @@ class MainWindow(QMainWindow):
                 group_roi.addChild(item)
             else:
                 group_trk.addChild(item)  # default bucket
-
-        # Connect visibility toggles
-        self.actorTree.itemChanged.connect(self.onActorVisibilityChanged)
 
     def onActorVisibilityChanged(self, item, column):
         """Toggle visibility when user clicks checkbox."""
