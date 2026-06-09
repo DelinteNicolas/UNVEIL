@@ -186,11 +186,9 @@ def plot_trk(trk_file, scalar=None, color_map='plasma', opacity: float = 1,
 class TrkViewer(QWidget):
     def __init__(self):
         super().__init__()
-        self.trk_file = None
-        self.nii_file = None
         self.nii_data = None
         self.grid = None
-        self.names = []
+        self.actor_types = {}
         self.x = 0
         self.y = 0
         self.z = 0
@@ -338,9 +336,8 @@ class TrkViewer(QWidget):
             return
 
         for trk_path in filePaths:
-            self.trk_file = trk_path
-            print(f"Loaded TRK file: {self.trk_file}")
-            self.names.append(self.trk_file)
+            print(f"Loaded TRK file: {trk_path}")
+            self.actor_types[trk_path] = 'trk'
 
         self.update_trk_viewer(reset_camera=True)
         self.parent().refreshActorList()
@@ -350,8 +347,7 @@ class TrkViewer(QWidget):
         filePath, _ = QFileDialog.getOpenFileName(
             self, "Open .nii.gz File", "", "Nifti Files (*.nii.gz)", options=options)
         if filePath:
-            self.nii_file = filePath
-            print(f"Loaded NIfTI file: {self.nii_file}")
+            print(f"Loaded NIfTI file: {filePath}")
             img = nib.load(filePath)
             self.nii_affine = img.affine
             self.nii_data = img.get_fdata()
@@ -388,7 +384,8 @@ class TrkViewer(QWidget):
 
             smooth = mesh.smooth_taubin(n_iter=12)
 
-            actor_name = f"roi_{roi_path.split('/')[-1]}"
+            actor_name = f"{roi_path.split('/')[-1]}"
+            self.actor_types[actor_name] = "roi"
 
             default_color = np.array([255, 255, 255])
 
@@ -406,8 +403,7 @@ class TrkViewer(QWidget):
         filePath, _ = QFileDialog.getOpenFileName(
             self, "Open .gii File", "", "Gifti Files (*.gii)", options=options)
         if filePath:
-            self.gii_file = filePath
-            print(f"Loaded GIfTI file: {self.gii_file}")
+            print(f"Loaded GIfTI file: {filePath}")
             self.gii_mesh = gifti_to_pyvista(filePath)
 
         self.update_gii_viewer(reset_camera=False)
@@ -512,12 +508,14 @@ class TrkViewer(QWidget):
             color_map = self.colorMapEdit.text()
             scalar = self.nii_data
 
-        for file in self.names:
+        for file in list(self.actor_types):
 
-            plot_trk(file, opacity=opacity, plotter=self.plotter, scalar=scalar,
-                     show_points=show_points, color_map=color_map,
-                     name=file, background=self.background,
-                     reset_camera=reset_camera, color_blind=self.color_blind)
+            if self.actor_types.get(file) == 'trk':
+
+                plot_trk(file, opacity=opacity, plotter=self.plotter, scalar=scalar,
+                         show_points=show_points, color_map=color_map,
+                         name=file, background=self.background,
+                         reset_camera=reset_camera, color_blind=self.color_blind)
 
     def _update_slice(self, axis, actor_name):
 
@@ -650,6 +648,7 @@ class MainWindow(QMainWindow):
 
     def refreshActorList(self):
         """Rebuild the hierarchical actor list grouped by class."""
+        self.actorTree.blockSignals(True)
         self.actorTree.clear()
 
         # Groups
@@ -673,7 +672,7 @@ class MainWindow(QMainWindow):
             # Store name for callback
             item.actor_name = name
 
-            if name.startswith("roi_"):
+            if self.viewer.actor_types.get(name) == 'roi':
 
                 rgb = self.viewer.roi_colors.get(name, (1, 1, 1))
 
@@ -682,16 +681,18 @@ class MainWindow(QMainWindow):
                 item.setBackground(1, qcolor)
 
             # Insert into the correct group
-            if name.endswith(".trk"):
+            if self.viewer.actor_types.get(name) == 'trk':
                 group_trk.addChild(item)
             elif name.startswith("nii_"):
                 group_nii.addChild(item)
             elif name.startswith("gii_"):
                 group_gii.addChild(item)
-            elif name.startswith("roi_"):
+            elif self.viewer.actor_types.get(name) == 'roi':
                 group_roi.addChild(item)
             else:
                 group_trk.addChild(item)  # default bucket
+
+        self.actorTree.blockSignals(False)
 
     def onActorVisibilityChanged(self, item, column):
         """Toggle visibility when user clicks checkbox."""
