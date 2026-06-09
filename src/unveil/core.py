@@ -408,7 +408,7 @@ class TrkViewer(QWidget):
 
             self.window().refreshActorList()
 
-            self.window().ortho_viewer.add_roi(actor_name, roi, default_color/255)
+            self.window().ortho_viewer.add_roi(actor_name, roi, default_color)
 
     def loadGiftiFile(self):
         options = QFileDialog.Options()
@@ -429,6 +429,8 @@ class TrkViewer(QWidget):
             self.background = 'white'
 
         self.plotter.background_color = self.background
+
+        self.window().ortho_viewer.set_background(self.background)
 
     def toggleColorBlind(self):
 
@@ -579,7 +581,7 @@ class OrthogonalViewer(QWidget):
 
         layout.addLayout(toolbar)
 
-        self.fig = Figure(figsize=(12, 4))
+        self.fig = Figure(figsize=(12, 4), layout='constrained')
         self.canvas = FigureCanvasQTAgg(self.fig)
 
         self.ax_axial = self.fig.add_subplot(131)
@@ -616,9 +618,10 @@ class OrthogonalViewer(QWidget):
         if roi_slice.max() == 0:
             return
 
-        ax.contour(roi_slice, levels=[0.5], colors=[color], linewidths=1)
+        ax.contour(roi_slice, levels=[0.5], colors=[color], linewidths=1.5,
+                   antialiased=True)
         ax.contourf(roi_slice, levels=[0.5, roi_slice.max()+1], colors=[color],
-                    alpha=0.35)
+                    alpha=0.5)
 
     def update_views(self):
 
@@ -672,12 +675,23 @@ class OrthogonalViewer(QWidget):
         )
 
         if file_path:
-            self.fig.savefig(
-                file_path,
-                dpi=300,
-                bbox_inches="tight",
-                facecolor=self.fig.get_facecolor()
-            )
+            self.fig.savefig(file_path, dpi=300,
+                             facecolor=self.fig.get_facecolor())
+
+    def set_background(self, color):
+
+        self.background = color
+
+        self.fig.patch.set_facecolor(color)
+
+        for ax in (
+            self.ax_axial,
+            self.ax_coronal,
+            self.ax_sagittal
+        ):
+            ax.set_facecolor(color)
+
+        self.canvas.draw_idle()
 
 
 class MainWindow(QMainWindow):
