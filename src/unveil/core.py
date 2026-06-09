@@ -209,10 +209,10 @@ class TrkViewer(QWidget):
         btn_xy = QPushButton("Axe 1")
         btn_xz = QPushButton("Axe 2")
         btn_yz = QPushButton("Axe 3")
-        btn_iso.clicked.connect(self.view_isometric)
-        btn_xy.clicked.connect(self.view_xy)
-        btn_xz.clicked.connect(self.view_xz)
-        btn_yz.clicked.connect(self.view_yz)
+        btn_iso.clicked.connect(lambda: self.set_view("view_isometric"))
+        btn_xy.clicked.connect(lambda: self.set_view("view_xy"))
+        btn_xz.clicked.connect(lambda: self.set_view("view_xz"))
+        btn_yz.clicked.connect(lambda: self.set_view("view_yz"))
         cam_layout.addWidget(camera_label)
         cam_layout.addWidget(btn_iso)
         cam_layout.addWidget(btn_xy)
@@ -423,24 +423,9 @@ class TrkViewer(QWidget):
         self.color_blind = not self.color_blind
         self.update_trk_viewer()
 
-    def view_isometric(self):
-        self.plotter.view_isometric()
-        self.plotter.camera.azimuth += self.flicker*180
-        self.flicker = not self.flicker
-
-    def view_xy(self):
-        self.plotter.view_xy()
-        self.plotter.camera.azimuth += self.flicker*180
-        self.flicker = not self.flicker
-
-    def view_xz(self):
-        self.plotter.view_xz()
-        self.plotter.camera.azimuth += self.flicker*180
-        self.flicker = not self.flicker
-
-    def view_yz(self):
-        self.plotter.view_yz()
-        self.plotter.camera.azimuth += self.flicker*180
+    def set_view(self, method):
+        getattr(self.plotter, method)()
+        self.plotter.camera.azimuth += self.flicker * 180
         self.flicker = not self.flicker
 
     def take_screenshot(self):
