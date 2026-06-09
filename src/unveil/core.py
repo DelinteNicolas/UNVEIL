@@ -685,8 +685,7 @@ class OrthogonalViewer(QWidget):
         )
 
         if file_path:
-            self.fig.savefig(file_path, dpi=300,
-                             facecolor=self.fig.get_facecolor())
+            self.fig.savefig(file_path, dpi=300, transparent=True)
 
     def set_background(self, color):
 
