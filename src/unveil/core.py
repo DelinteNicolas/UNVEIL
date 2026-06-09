@@ -286,7 +286,8 @@ class TrkViewer(QWidget):
         self.XSlider.setMinimum(0)
         self.XSlider.setMaximum(100)
         self.XSlider.setValue(100)
-        self.XSlider.sliderReleased.connect(self._update_nii_x)
+        self.XSlider.sliderReleased.connect(
+            lambda: self._update_slice('x', 'nii_x'))
         control_layout.addWidget(self.XSlider)
         self.y_label = QLabel('Y')
         control_layout.addWidget(self.y_label)
@@ -294,7 +295,8 @@ class TrkViewer(QWidget):
         self.YSlider.setMinimum(0)
         self.YSlider.setMaximum(100)
         self.YSlider.setValue(100)
-        self.YSlider.sliderReleased.connect(self._update_nii_y)
+        self.YSlider.sliderReleased.connect(
+            lambda: self._update_slice('y', 'nii_y'))
         control_layout.addWidget(self.YSlider)
         self.z_label = QLabel('Z')
         control_layout.addWidget(self.z_label)
@@ -302,7 +304,8 @@ class TrkViewer(QWidget):
         self.ZSlider.setMinimum(0)
         self.ZSlider.setMaximum(100)
         self.ZSlider.setValue(100)
-        self.ZSlider.sliderReleased.connect(self._update_nii_z)
+        self.ZSlider.sliderReleased.connect(
+            lambda: self._update_slice('z', 'nii_z'))
         control_layout.addWidget(self.ZSlider)
 
         # Gifti
@@ -516,59 +519,29 @@ class TrkViewer(QWidget):
                      name=file, background=self.background,
                      reset_camera=reset_camera, color_blind=self.color_blind)
 
-    def _update_nii_x(self):
+    def _update_slice(self, axis, actor_name):
 
         if self.showSlicesCheckbox.isChecked():
 
-            center = (self.XSlider.value(),
-                      self.YSlider.value(), self.ZSlider.value())
+            center = (self.XSlider.value(), self.YSlider.value(),
+                      self.ZSlider.value())
 
-            slice_x = self.grid.slice('x', center)
-            self.plotter.add_mesh(slice_x, cmap='grey', name='nii_x',
+            slice_mesh = self.grid.slice(axis, origin=center)
+
+            self.plotter.add_mesh(slice_mesh, cmap='grey', name=actor_name,
                                   show_scalar_bar=False, point_size=0,
                                   render_lines_as_tubes=True,
                                   reset_camera=False,
                                   user_matrix=self.nii_affine)
+
         else:
-            self.plotter.remove_actor('nii_x')
-
-    def _update_nii_y(self):
-
-        if self.showSlicesCheckbox.isChecked():
-
-            center = (self.XSlider.value(),
-                      self.YSlider.value(), self.ZSlider.value())
-
-            slice_y = self.grid.slice('y', center)
-            self.plotter.add_mesh(slice_y, cmap='grey', name='nii_y',
-                                  show_scalar_bar=False, point_size=0,
-                                  render_lines_as_tubes=True,
-                                  reset_camera=False,
-                                  user_matrix=self.nii_affine)
-        else:
-            self.plotter.remove_actor('nii_y')
-
-    def _update_nii_z(self):
-
-        if self.showSlicesCheckbox.isChecked():
-
-            center = (self.XSlider.value(),
-                      self.YSlider.value(), self.ZSlider.value())
-
-            slice_z = self.grid.slice('z', center)
-            self.plotter.add_mesh(slice_z, cmap='grey', name='nii_z',
-                                  show_scalar_bar=False, point_size=0,
-                                  render_lines_as_tubes=True,
-                                  reset_camera=False,
-                                  user_matrix=self.nii_affine)
-        else:
-            self.plotter.remove_actor('nii_z')
+            self.plotter.remove_actor(actor_name)
 
     def update_nii_viewer(self, reset_camera: bool = False):
 
-        self._update_nii_x()
-        self._update_nii_y()
-        self._update_nii_z()
+        self._update_slice('x', 'nii_x')
+        self._update_slice('y', 'nii_y')
+        self._update_slice('z', 'nii_z')
 
         opacity = self.nii_opacitySlider.value()/1000
         self.plotter.add_volume(self.grid, cmap='gray', opacity=[0, opacity],
@@ -648,10 +621,10 @@ class MainWindow(QMainWindow):
 
         self.actorTree.setHeaderLabels(["Visible", "Color", "Actor"])
         self.actorTree.setColumnCount(3)
-        self.actorTree.setIndentation(10)
+        self.actorTree.setIndentation(5)
 
-        self.actorTree.setColumnWidth(0, 35)
-        self.actorTree.setColumnWidth(1, 30)
+        self.actorTree.setColumnWidth(0, 45)
+        self.actorTree.setColumnWidth(1, 40)
         self.actorTree.setColumnWidth(2, 220)
 
         self.actorDock.setWidget(self.actorTree)
