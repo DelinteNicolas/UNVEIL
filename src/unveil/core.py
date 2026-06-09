@@ -565,7 +565,19 @@ class OrthogonalViewer(QWidget):
         self.rois = {}
         self.roi_visibility = {}
 
+        self.background = "white"
+
         layout = QVBoxLayout(self)
+
+        toolbar = QHBoxLayout()
+
+        btn_screenshot = QPushButton("Screenshot")
+        btn_screenshot.clicked.connect(self.take_screenshot)
+
+        toolbar.addStretch()
+        toolbar.addWidget(btn_screenshot)
+
+        layout.addLayout(toolbar)
 
         self.fig = Figure(figsize=(12, 4))
         self.canvas = FigureCanvasQTAgg(self.fig)
@@ -626,27 +638,12 @@ class OrthogonalViewer(QWidget):
         self.ax_coronal.clear()
         self.ax_sagittal.clear()
 
-        for ax in (
-            self.ax_axial,
-            self.ax_coronal,
-            self.ax_sagittal
-        ):
+        for ax in (self.ax_axial, self.ax_coronal, self.ax_sagittal):
             ax.axis("off")
 
-        self.ax_axial.imshow(
-            np.rot90(axial),
-            cmap="gray"
-        )
-
-        self.ax_coronal.imshow(
-            np.rot90(coronal),
-            cmap="gray"
-        )
-
-        self.ax_sagittal.imshow(
-            np.rot90(sagittal),
-            cmap="gray"
-        )
+        self.ax_axial.imshow(np.rot90(axial), cmap="gray")
+        self.ax_coronal.imshow(np.rot90(coronal), cmap="gray")
+        self.ax_sagittal.imshow(np.rot90(sagittal), cmap="gray")
 
         for name, roi_info in self.rois.items():
 
@@ -661,6 +658,26 @@ class OrthogonalViewer(QWidget):
             self.draw_roi(self.ax_sagittal, np.rot90(roi[x, :, :]), color)
 
         self.canvas.draw_idle()
+
+    def take_screenshot(self):
+
+        options = QFileDialog.Options()
+
+        file_path, _ = QFileDialog.getSaveFileName(
+            self,
+            "Save Orthogonal View",
+            "",
+            "PNG Image (*.png);;JPEG Image (*.jpg);;TIFF Image (*.tif);; SVG Image (*.svg)",
+            options=options
+        )
+
+        if file_path:
+            self.fig.savefig(
+                file_path,
+                dpi=300,
+                bbox_inches="tight",
+                facecolor=self.fig.get_facecolor()
+            )
 
 
 class MainWindow(QMainWindow):
