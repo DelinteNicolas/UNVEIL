@@ -14,11 +14,13 @@ from PyQt6.QtWidgets import (QApplication, QWidget, QHBoxLayout, QVBoxLayout,
                              QPushButton, QFileDialog, QCheckBox, QSlider,
                              QLabel, QComboBox, QMainWindow, QLineEdit,
                              QDockWidget, QTreeWidget, QTreeWidgetItem,
-                             QColorDialog)
+                             QColorDialog, QTabWidget)
 from PyQt6.QtGui import QAction, QColor
 from dipy.io.streamline import load_tractogram
 from matplotlib import pyplot as plt
 from matplotlib.colors import LinearSegmentedColormap
+from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg
+from matplotlib.figure import Figure
 # from unravel.utils import get_streamline_density
 
 
@@ -197,6 +199,8 @@ class TrkViewer(QWidget):
         self.color_blind = False
         self.flicker = False
         self.roi_colors = {}
+        self.roi_volumes = {}
+        self.roi_visibility = {}
 
     def initUI(self):
         # Create the main layout
@@ -340,7 +344,7 @@ class TrkViewer(QWidget):
             self.actor_types[trk_path] = 'trk'
 
         self.update_trk_viewer(reset_camera=True)
-        self.parent().refreshActorList()
+        self.window().refreshActorList()
 
     def loadNiftiFile(self):
         options = QFileDialog.Options()
@@ -361,7 +365,9 @@ class TrkViewer(QWidget):
         self.ZSlider.setMaximum(self.nii_data.shape[2])
 
         self.update_nii_viewer(reset_camera=False)
-        self.parent().refreshActorList()
+        self.window().refreshActorList()
+
+        self.window().ortho_viewer.set_volume(self.nii_data, self.nii_affine)
 
     def loadROIFile(self):
         """Load one or multiple ROI nifti volumes and render as surfaces."""
@@ -386,8 +392,10 @@ class TrkViewer(QWidget):
 
             actor_name = f"{roi_path.split('/')[-1]}"
             self.actor_types[actor_name] = "roi"
+            self.roi_volumes[actor_name] = roi
+            self.roi_visibility[actor_name] = True
 
-            default_color = np.array([255, 255, 255])
+            default_color = np.array([1.0, 1.0, 1.0])
 
             self.roi_colors[actor_name] = default_color
 
@@ -396,7 +404,9 @@ class TrkViewer(QWidget):
                                   reset_camera=False, point_size=0,
                                   render_lines_as_tubes=True)
 
-            self.parent().refreshActorList()
+            self.window().refreshActorList()
+
+            self.window().ortho_viewer.add_roi(actor_name, roi, default_color/255)
 
     def loadGiftiFile(self):
         options = QFileDialog.Options()
@@ -407,7 +417,7 @@ class TrkViewer(QWidget):
             self.gii_mesh = gifti_to_pyvista(filePath)
 
         self.update_gii_viewer(reset_camera=False)
-        self.parent().refreshActorList()
+        self.window().refreshActorList()
 
     def set_background_color(self):
 
@@ -542,11 +552,157 @@ class TrkViewer(QWidget):
                               render_lines_as_tubes=True,)
 
 
+class OrthogonalViewer(QWidget):
+
+    def __init__(self):
+        super().__init__()
+
+        self.volume = None
+        self.affine = None
+
+        self.rois = {}
+        self.roi_visibility = {}
+
+        layout = QVBoxLayout(self)
+
+        self.fig = Figure(figsize=(12, 4))
+        self.canvas = FigureCanvasQTAgg(self.fig)
+
+        self.ax_axial = self.fig.add_subplot(131)
+        self.ax_coronal = self.fig.add_subplot(132)
+        self.ax_sagittal = self.fig.add_subplot(133)
+
+        layout.addWidget(self.canvas)
+
+        self.slice_slider = QSlider(Qt.Orientation.Horizontal)
+        self.slice_slider.valueChanged.connect(self.update_views)
+
+        layout.addWidget(self.slice_slider)
+
+    def set_volume(self, volume, affine=None):
+
+        self.volume = volume
+        self.affine = affine
+
+        self.slice_slider.setMaximum(volume.shape[2]-1)
+        self.slice_slider.setValue(volume.shape[2]//2)
+
+        self.update_views()
+
+    def add_roi(self, name, roi, color):
+
+        self.rois[name] = {
+            "data": roi,
+            "color": color
+        }
+
+        self.roi_visibility[name] = True
+
+        self.update_views()
+
+    def draw_roi(self, ax, roi_slice, color):
+
+        if roi_slice.max() == 0:
+            return
+
+        ax.contour(
+            roi_slice,
+            levels=[0.5],
+            colors=[color],
+            linewidths=2
+        )
+
+        ax.contourf(
+            roi_slice,
+            levels=[0.5, roi_slice.max()+1],
+            colors=[color],
+            alpha=0.35
+        )
+
+    def update_views(self):
+
+        if self.volume is None:
+            return
+
+        z = self.slice_slider.value()
+
+        x = self.volume.shape[0]//2
+        y = self.volume.shape[1]//2
+
+        axial = self.volume[:, :, z]
+        coronal = self.volume[:, y, :]
+        sagittal = self.volume[x, :, :]
+
+        self.ax_axial.clear()
+        self.ax_coronal.clear()
+        self.ax_sagittal.clear()
+
+        for ax in (
+            self.ax_axial,
+            self.ax_coronal,
+            self.ax_sagittal
+        ):
+            ax.axis("off")
+
+        self.ax_axial.imshow(
+            np.rot90(axial),
+            cmap="gray",
+            interpolation="bicubic"
+        )
+
+        self.ax_coronal.imshow(
+            np.rot90(coronal),
+            cmap="gray",
+            interpolation="bicubic"
+        )
+
+        self.ax_sagittal.imshow(
+            np.rot90(sagittal),
+            cmap="gray",
+            interpolation="bicubic"
+        )
+
+        for name, roi_info in self.rois.items():
+
+            if not self.roi_visibility[name]:
+                continue
+
+            roi = roi_info["data"]
+            color = roi_info["color"]
+
+            self.draw_roi(
+                self.ax_axial,
+                np.rot90(roi[:, :, z]),
+                color
+            )
+
+            self.draw_roi(
+                self.ax_coronal,
+                np.rot90(roi[:, y, :]),
+                color
+            )
+
+            self.draw_roi(
+                self.ax_sagittal,
+                np.rot90(roi[x, :, :]),
+                color
+            )
+
+        self.canvas.draw_idle()
+
+
 class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
+        self.tabs = QTabWidget()
+
         self.viewer = TrkViewer()
-        self.setCentralWidget(self.viewer)
+        self.ortho_viewer = OrthogonalViewer()
+
+        self.tabs.addTab(self.viewer, "3D Viewer")
+        self.tabs.addTab(self.ortho_viewer, "Orthogonal Viewer")
+
+        self.setCentralWidget(self.tabs)
         self.initActorDock()
         self.initMenuBar()
         self.setWindowTitle("UNVEIL - Tractography Viewer")
@@ -692,6 +848,10 @@ class MainWindow(QMainWindow):
         except KeyError:
             pass
 
+        self.viewer.roi_visibility[actor_name] = visible
+        self.ortho_viewer.roi_visibility[actor_name] = visible
+        self.ortho_viewer.update_views()
+
         self.viewer.plotter.render()
 
     def changeActorColor(self, item, column):
@@ -704,7 +864,7 @@ class MainWindow(QMainWindow):
         if actor_name is None:
             return
 
-        if not actor_name.startswith("roi_"):
+        if self.viewer.actor_types.get(actor_name) != "roi":
             return
 
         color = QColorDialog.getColor()
@@ -712,11 +872,7 @@ class MainWindow(QMainWindow):
         if not color.isValid():
             return
 
-        rgb = (
-            color.red() / 255,
-            color.green() / 255,
-            color.blue() / 255
-        )
+        rgb = (color.red() / 255, color.green() / 255, color.blue() / 255)
 
         self.viewer.roi_colors[actor_name] = rgb
 
@@ -724,9 +880,7 @@ class MainWindow(QMainWindow):
 
         try:
             actor = self.viewer.plotter.actors[actor_name]
-
             actor.GetProperty().SetColor(*rgb)
-
             self.viewer.plotter.render()
 
         except Exception:
