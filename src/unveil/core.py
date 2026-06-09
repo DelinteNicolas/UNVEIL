@@ -611,9 +611,7 @@ class OrthogonalViewer(QWidget):
     def add_roi(self, name, roi, color):
 
         self.rois[name] = {"data": roi, "color": color}
-
         self.roi_visibility[name] = True
-
         self.update_views()
 
     def draw_roi(self, ax, roi_slice, color):
@@ -676,13 +674,11 @@ class OrthogonalViewer(QWidget):
 
         options = QFileDialog.Options()
 
-        file_path, _ = QFileDialog.getSaveFileName(
-            self,
-            "Save Orthogonal View",
-            "",
-            "PNG Image (*.png);;JPEG Image (*.jpg);;TIFF Image (*.tif);; SVG Image (*.svg)",
-            options=options
-        )
+        file_path, _ = QFileDialog.getSaveFileName(self,
+                                                   "Save Orthogonal View", "",
+                                                   "PNG Image (*.png);;JPEG Image (*.jpg);;TIFF Image (*.tif);; SVG Image (*.svg)",
+                                                   options=options
+                                                   )
 
         if file_path:
             self.fig.savefig(file_path, dpi=300, transparent=True)
@@ -693,11 +689,7 @@ class OrthogonalViewer(QWidget):
 
         self.fig.patch.set_facecolor(color)
 
-        for ax in (
-            self.ax_axial,
-            self.ax_coronal,
-            self.ax_sagittal
-        ):
+        for ax in (self.ax_axial, self.ax_coronal, self.ax_sagittal):
             ax.set_facecolor(color)
 
         self.canvas.draw_idle()
@@ -710,15 +702,12 @@ class OrthogonalViewer(QWidget):
         step = 1 if event.button == "up" else -1
 
         if event.inaxes == self.ax_axial:
-
             self.z = np.clip(self.z + step, 0, self.volume.shape[2]-1)
 
         elif event.inaxes == self.ax_coronal:
-
             self.y = np.clip(self.y + step, 0, self.volume.shape[1]-1)
 
         elif event.inaxes == self.ax_sagittal:
-
             self.x = np.clip(self.x + step, 0, self.volume.shape[0]-1)
 
         self.update_views()
