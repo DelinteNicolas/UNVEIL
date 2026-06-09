@@ -387,7 +387,7 @@ class TrkViewer(QWidget):
 
             actor_name = f"roi_{roi_path.split('/')[-1]}"
 
-            default_color = np.array([0, 0, 0])
+            default_color = np.array([255, 255, 255])
 
             self.roi_colors[actor_name] = default_color
 
@@ -648,9 +648,10 @@ class MainWindow(QMainWindow):
 
         self.actorTree.setHeaderLabels(["Visible", "Color", "Actor"])
         self.actorTree.setColumnCount(3)
+        self.actorTree.setIndentation(10)
 
-        self.actorTree.setColumnWidth(0, 70)
-        self.actorTree.setColumnWidth(1, 60)
+        self.actorTree.setColumnWidth(0, 35)
+        self.actorTree.setColumnWidth(1, 30)
         self.actorTree.setColumnWidth(2, 220)
 
         self.actorDock.setWidget(self.actorTree)
