@@ -355,6 +355,7 @@ class TrkViewer(QWidget):
             img = nib.load(filePath)
             self.nii_affine = img.affine
             self.nii_data = img.get_fdata()
+
             grid = pv.ImageData()
             grid.dimensions = np.array(self.nii_data.shape) + 1
             grid.cell_data['values'] = self.nii_data.flatten(order='F')
@@ -367,6 +368,7 @@ class TrkViewer(QWidget):
         self.update_nii_viewer(reset_camera=False)
         self.window().refreshActorList()
 
+        self.nii_data[self.nii_data == 0] = None
         self.window().ortho_viewer.set_volume(self.nii_data, self.nii_affine)
 
     def loadROIFile(self):
@@ -591,10 +593,7 @@ class OrthogonalViewer(QWidget):
 
     def add_roi(self, name, roi, color):
 
-        self.rois[name] = {
-            "data": roi,
-            "color": color
-        }
+        self.rois[name] = {"data": roi, "color": color}
 
         self.roi_visibility[name] = True
 
@@ -605,19 +604,9 @@ class OrthogonalViewer(QWidget):
         if roi_slice.max() == 0:
             return
 
-        ax.contour(
-            roi_slice,
-            levels=[0.5],
-            colors=[color],
-            linewidths=2
-        )
-
-        ax.contourf(
-            roi_slice,
-            levels=[0.5, roi_slice.max()+1],
-            colors=[color],
-            alpha=0.35
-        )
+        ax.contour(roi_slice, levels=[0.5], colors=[color], linewidths=1)
+        ax.contourf(roi_slice, levels=[0.5, roi_slice.max()+1], colors=[color],
+                    alpha=0.35)
 
     def update_views(self):
 
@@ -646,20 +635,17 @@ class OrthogonalViewer(QWidget):
 
         self.ax_axial.imshow(
             np.rot90(axial),
-            cmap="gray",
-            interpolation="bicubic"
+            cmap="gray"
         )
 
         self.ax_coronal.imshow(
             np.rot90(coronal),
-            cmap="gray",
-            interpolation="bicubic"
+            cmap="gray"
         )
 
         self.ax_sagittal.imshow(
             np.rot90(sagittal),
-            cmap="gray",
-            interpolation="bicubic"
+            cmap="gray"
         )
 
         for name, roi_info in self.rois.items():
@@ -670,23 +656,9 @@ class OrthogonalViewer(QWidget):
             roi = roi_info["data"]
             color = roi_info["color"]
 
-            self.draw_roi(
-                self.ax_axial,
-                np.rot90(roi[:, :, z]),
-                color
-            )
-
-            self.draw_roi(
-                self.ax_coronal,
-                np.rot90(roi[:, y, :]),
-                color
-            )
-
-            self.draw_roi(
-                self.ax_sagittal,
-                np.rot90(roi[x, :, :]),
-                color
-            )
+            self.draw_roi(self.ax_axial, np.rot90(roi[:, :, z]), color)
+            self.draw_roi(self.ax_coronal, np.rot90(roi[:, y, :]), color)
+            self.draw_roi(self.ax_sagittal, np.rot90(roi[x, :, :]), color)
 
         self.canvas.draw_idle()
 
@@ -875,6 +847,9 @@ class MainWindow(QMainWindow):
         rgb = (color.red() / 255, color.green() / 255, color.blue() / 255)
 
         self.viewer.roi_colors[actor_name] = rgb
+        if actor_name in self.ortho_viewer.rois:
+            self.ortho_viewer.rois[actor_name]["color"] = rgb
+            self.ortho_viewer.update_views()
 
         item.setBackground(1, color)
 
