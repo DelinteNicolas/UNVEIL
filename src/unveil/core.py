@@ -592,12 +592,6 @@ class TrkViewer(QWidget):
             return
 
         opacity = self.gii_opacitySlider.value() / 100
-        xray_mode = self.xrayCheckbox.isChecked()
-
-        # remove vtk actor
-        if self.gii_overlay_actor is not None:
-            self.plotter.renderer.RemoveActor(self.gii_overlay_actor)
-            self.gii_overlay_actor = None
 
         self.plotter.add_mesh(
             self.gii_mesh,
