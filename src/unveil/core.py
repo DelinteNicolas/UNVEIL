@@ -195,20 +195,6 @@ class TrkViewer(QWidget):
         self.x = 0
         self.y = 0
         self.z = 0
-        self.colormap_list = ['viridis', 'plasma', 'inferno', 'magma', 'cividis',
-                              'Greys', 'Purples', 'Blues', 'Greens', 'Oranges',
-                              'Reds', 'gray', 'bone', 'pink', 'spring', 'summer',
-                              'autumn', 'winter', 'cool', 'Wistia', 'hot',
-                              'afmhot', 'gist_heat', 'copper', 'RdBu', 'RdYlBu',
-                              'RdYlGn', 'Spectral', 'coolwarm', 'bwr', 'seismic',
-                              'berlin', 'managua', 'vanimo', 'twilight',
-                              'twilight_shifted', 'hsv', 'Pastel1', 'Pastel2',
-                              'Paired', 'Accent', 'okabe_ito', 'Dark2', 'Set1',
-                              'Set2', 'Set3', 'tab10', 'tab20', 'tab20b', 'tab20c',
-                              'flag', 'prism', 'ocean', 'gist_earth', 'terrain',
-                              'gist_stern', 'gnuplot', 'gnuplot2', 'CMRmap',
-                              'cubehelix', 'brg', 'gist_rainbow', 'rainbow',
-                              'jet', 'turbo', 'nipy_spectral', 'gist_ncar']
         self.initUI()
         self.background = 'white'
         self.color_blind = False
@@ -269,7 +255,7 @@ class TrkViewer(QWidget):
         self.showPointsCheckbox.stateChanged.connect(self.update_trk_viewer)
         control_layout.addWidget(self.showPointsCheckbox)
 
-        self.colorMapLabel = QLabel('Tract Color Mode:')
+        self.colorMapLabel = QLabel('Color Map:')
         control_layout.addWidget(self.colorMapLabel)
 
         self.colorMapComboBox = QComboBox()
@@ -277,17 +263,13 @@ class TrkViewer(QWidget):
         self.colorMapComboBox.currentIndexChanged.connect(
             self.update_trk_viewer)
         control_layout.addWidget(self.colorMapComboBox)
+        self.colorMapEdit = QLineEdit()
+        self.colorMapEdit.textChanged.connect(self.update_trk_viewer)
+        self.colorMapEdit.setToolTip(
+            'Insert color map name. Name must be in the matplotlib library. Scalar nii.gz must be loaded.')
+        control_layout.addWidget(self.colorMapEdit)
 
-        self.tractColorMapLabel = QLabel('Tract Colormap (Scalar):')
-        control_layout.addWidget(self.tractColorMapLabel)
-
-        self.tractColorMapComboBox = QComboBox()
-        self.tractColorMapComboBox.addItems(self.colormap_list)
-        self.tractColorMapComboBox.currentIndexChanged.connect(
-            self.update_trk_viewer)
-        control_layout.addWidget(self.tractColorMapComboBox)
-
-        self.volume_label = QLabel('Volume Opacity')
+        self.volume_label = QLabel('Volume')
         control_layout.addWidget(self.volume_label)
 
         self.nii_opacitySlider = QSlider(Qt.Orientation.Horizontal, self)
@@ -296,15 +278,6 @@ class TrkViewer(QWidget):
         self.nii_opacitySlider.setValue(45)
         self.nii_opacitySlider.sliderReleased.connect(self.update_nii_viewer)
         control_layout.addWidget(self.nii_opacitySlider)
-
-        self.niiColorMapLabel = QLabel('Global Volume Colormap:')
-        control_layout.addWidget(self.niiColorMapLabel)
-
-        self.niiColorMapComboBox = QComboBox()
-        self.niiColorMapComboBox.addItems(self.colormap_list)
-        self.niiColorMapComboBox.currentIndexChanged.connect(
-            self.on_nii_colormap_changed)
-        control_layout.addWidget(self.niiColorMapComboBox)
 
         self.showSlicesCheckbox = QCheckBox('Show Slices')
         self.showSlicesCheckbox.stateChanged.connect(self.update_nii_viewer)
@@ -401,10 +374,8 @@ class TrkViewer(QWidget):
         self.update_nii_viewer(reset_camera=False)
         self.window().refreshActorList()
 
-        # Update 2D view with current colormap
         self.nii_data[self.nii_data == 0] = None
         self.window().ortho_viewer.set_volume(self.nii_data, self.nii_affine)
-        self.window().ortho_viewer.set_colormap(self.niiColorMapComboBox.currentText())
 
     def loadROIFile(self):
         """Load one or multiple ROI nifti volumes and render as surfaces."""
@@ -526,25 +497,20 @@ class TrkViewer(QWidget):
             self.plotter.render()
         offscreen.close()
 
-    def on_nii_colormap_changed(self):
-        self.update_nii_viewer()
-        if hasattr(self.window(), 'ortho_viewer'):
-            self.window().ortho_viewer.set_colormap(self.niiColorMapComboBox.currentText())
-
     def update_trk_viewer(self, reset_camera: bool = False):
 
         opacity = self.opacitySlider.value() / 100.0
         show_points = self.showPointsCheckbox.isChecked()
 
-        color_mode = self.colorMapComboBox.currentText()
-        if color_mode == 'flesh':
+        color_map = self.colorMapComboBox.currentText()
+        if color_map == 'flesh':
             color_map = 'flesh'
             scalar = None
-        elif color_mode == 'rgb':
+        elif color_map == 'rgb':
             color_map = 'plasma'
             scalar = None
         else:
-            color_map = self.tractColorMapComboBox.currentText()
+            color_map = self.colorMapEdit.text()
             scalar = self.nii_data
 
         for file in list(self.actor_types):
@@ -558,15 +524,14 @@ class TrkViewer(QWidget):
 
     def _update_slice(self, axis, actor_name):
 
-        if self.showSlicesCheckbox.isChecked() and self.grid is not None:
+        if self.showSlicesCheckbox.isChecked():
 
             center = (self.XSlider.value(), self.YSlider.value(),
                       self.ZSlider.value())
 
             slice_mesh = self.grid.slice(axis, origin=center)
-            cmap_name = self.niiColorMapComboBox.currentText()
 
-            self.plotter.add_mesh(slice_mesh, cmap=cmap_name, name=actor_name,
+            self.plotter.add_mesh(slice_mesh, cmap='grey', name=actor_name,
                                   show_scalar_bar=False, point_size=0,
                                   render_lines_as_tubes=True,
                                   reset_camera=False,
@@ -576,17 +541,13 @@ class TrkViewer(QWidget):
             self.plotter.remove_actor(actor_name)
 
     def update_nii_viewer(self, reset_camera: bool = False):
-        if self.grid is None:
-            return
 
         self._update_slice('x', 'nii_x')
         self._update_slice('y', 'nii_y')
         self._update_slice('z', 'nii_z')
 
         opacity = self.nii_opacitySlider.value()/1000
-        cmap_name = self.niiColorMapComboBox.currentText()
-
-        self.plotter.add_volume(self.grid, cmap=cmap_name, opacity=[0, opacity],
+        self.plotter.add_volume(self.grid, cmap='gray', opacity=[0, opacity],
                                 show_scalar_bar=False, name='nii_volume',
                                 reset_camera=reset_camera,
                                 user_matrix=self.nii_affine)
@@ -663,7 +624,6 @@ class OrthogonalViewer(QWidget):
 
         self.volume = None
         self.affine = None
-        self.cmap = "gray"
 
         self.rois = {}
         self.roi_visibility = {}
@@ -709,10 +669,6 @@ class OrthogonalViewer(QWidget):
 
         self.update_views()
 
-    def set_colormap(self, cmap_name):
-        self.cmap = cmap_name
-        self.update_views()
-
     def add_roi(self, name, roi, color):
 
         self.rois[name] = {"data": roi, "color": color}
@@ -749,9 +705,9 @@ class OrthogonalViewer(QWidget):
         for ax in (self.ax_axial, self.ax_coronal, self.ax_sagittal):
             ax.axis("off")
 
-        self.ax_axial.imshow(np.rot90(axial), cmap=self.cmap, vmin=0)
-        self.ax_coronal.imshow(np.rot90(coronal), cmap=self.cmap, vmin=0)
-        self.ax_sagittal.imshow(np.rot90(sagittal), cmap=self.cmap, vmin=0)
+        self.ax_axial.imshow(np.rot90(axial), cmap="gray", vmin=0)
+        self.ax_coronal.imshow(np.rot90(coronal), cmap="gray", vmin=0)
+        self.ax_sagittal.imshow(np.rot90(sagittal), cmap="gray", vmin=0)
 
         for name, roi_info in self.rois.items():
 
@@ -766,6 +722,14 @@ class OrthogonalViewer(QWidget):
             self.draw_roi(self.ax_sagittal, np.rot90(roi[x, :, :]), color)
 
         self.canvas.draw_idle()
+
+        # self.window().viewer.XSlider.setValue(self.x)
+        # self.window().viewer.YSlider.setValue(self.y)
+        # self.window().viewer.ZSlider.setValue(self.z)
+
+        # self.window().viewer._update_slice('x', 'nii_x')
+        # self.window().viewer._update_slice('y', 'nii_y')
+        # self.window().viewer._update_slice('z', 'nii_z')
 
     def take_screenshot(self):
 
@@ -941,17 +905,110 @@ class MainWindow(QMainWindow):
             self.actorDock.hide()
 
     def refreshActorList(self):
-        pass
+        """Rebuild the hierarchical actor list grouped by class."""
+        self.actorTree.blockSignals(True)
+        self.actorTree.clear()
 
-    def changeActorColor(self, item, column):
-        pass
+        # Groups
+        group_trk = QTreeWidgetItem(["TRK", ""])
+        group_nii = QTreeWidgetItem(["NIfTI Volume", ""])
+        group_roi = QTreeWidgetItem(["ROI Surfaces", ""])
+        group_gii = QTreeWidgetItem(["GIFTI", ""])
+
+        self.actorTree.addTopLevelItem(group_trk)
+        self.actorTree.addTopLevelItem(group_nii)
+        self.actorTree.addTopLevelItem(group_gii)
+        self.actorTree.addTopLevelItem(group_roi)
+        # Loop through PyVista actors
+        for name, actor in self.viewer.plotter.actors.items():
+
+            item = QTreeWidgetItem(["", "", name])
+
+            item.setCheckState(0, Qt.CheckState.Checked if actor.GetVisibility()
+                               else Qt.CheckState.Unchecked)
+
+            # Store name for callback
+            item.actor_name = name
+
+            if self.viewer.actor_types.get(name) == 'roi':
+
+                rgb = self.viewer.roi_colors.get(name, (1, 1, 1))
+
+                qcolor = QColor(int(rgb[0] * 255), int(rgb[1] * 255),
+                                int(rgb[2] * 255))
+                item.setBackground(1, qcolor)
+
+            # Insert into the correct group
+            if self.viewer.actor_types.get(name) == 'trk':
+                group_trk.addChild(item)
+            elif name.startswith("nii_"):
+                group_nii.addChild(item)
+            elif name.startswith("gii_"):
+                group_gii.addChild(item)
+            elif self.viewer.actor_types.get(name) == 'roi':
+                group_roi.addChild(item)
+            else:
+                group_trk.addChild(item)  # default bucket
+
+        self.actorTree.blockSignals(False)
 
     def onActorVisibilityChanged(self, item, column):
-        pass
+        """Toggle visibility when user clicks checkbox."""
+        if column != 0:
+            return
+
+        actor_name = item.actor_name
+        visible = item.checkState(0) == Qt.CheckState.Checked
+
+        try:
+            self.viewer.plotter.actors[actor_name].SetVisibility(visible)
+        except KeyError:
+            pass
+
+        self.viewer.roi_visibility[actor_name] = visible
+        self.ortho_viewer.roi_visibility[actor_name] = visible
+        self.ortho_viewer.update_views()
+
+        self.viewer.plotter.render()
+
+    def changeActorColor(self, item, column):
+
+        if column != 1:
+            return
+
+        actor_name = getattr(item, "actor_name", None)
+
+        if actor_name is None:
+            return
+
+        if self.viewer.actor_types.get(actor_name) != "roi":
+            return
+
+        color = QColorDialog.getColor()
+
+        if not color.isValid():
+            return
+
+        rgb = (color.red() / 255, color.green() / 255, color.blue() / 255)
+
+        self.viewer.roi_colors[actor_name] = rgb
+        if actor_name in self.ortho_viewer.rois:
+            self.ortho_viewer.rois[actor_name]["color"] = rgb
+            self.ortho_viewer.update_views()
+
+        item.setBackground(1, color)
+
+        try:
+            actor = self.viewer.plotter.actors[actor_name]
+            actor.GetProperty().SetColor(*rgb)
+            self.viewer.plotter.render()
+
+        except Exception:
+            pass
 
 
 if __name__ == '__main__':
     app = QApplication(sys.argv)
-    mainWin = MainWindow()
-    mainWin.show()
+    window = MainWindow()
+    window.show()
     sys.exit(app.exec())
