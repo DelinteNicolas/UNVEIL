@@ -22,7 +22,6 @@ from matplotlib.colors import LinearSegmentedColormap
 from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg
 from matplotlib.figure import Figure
 # from unravel.utils import get_streamline_density
-import vtk
 
 
 def gifti_to_pyvista(gii_path):
@@ -195,9 +194,10 @@ class TrkViewer(QWidget):
         self.x = 0
         self.y = 0
         self.z = 0
-        self.colormap_list = ['viridis', 'plasma', 'inferno', 'magma', 'cividis',
+        self.colormap_list = ['gray',
+                              'viridis', 'plasma', 'inferno', 'magma', 'cividis',
                               'Greys', 'Purples', 'Blues', 'Greens', 'Oranges',
-                              'Reds', 'gray', 'bone', 'pink', 'spring', 'summer',
+                              'Reds', 'bone', 'pink', 'spring', 'summer',
                               'autumn', 'winter', 'cool', 'Wistia', 'hot',
                               'afmhot', 'gist_heat', 'copper', 'RdBu', 'RdYlBu',
                               'RdYlGn', 'Spectral', 'coolwarm', 'bwr', 'seismic',
@@ -348,11 +348,6 @@ class TrkViewer(QWidget):
         self.gii_opacitySlider.setValue(15)
         self.gii_opacitySlider.sliderReleased.connect(self.update_gii_viewer)
         control_layout.addWidget(self.gii_opacitySlider)
-
-        self.xrayCheckbox = QCheckBox("X-ray GIFTI view")
-        self.xrayCheckbox.stateChanged.connect(self.update_gii_viewer)
-        control_layout.addWidget(self.xrayCheckbox)
-        self.gii_overlay_actor = None
 
         # Add the control panel layout to the main layout
         main_layout.addWidget(control_widget)
@@ -599,61 +594,24 @@ class TrkViewer(QWidget):
         opacity = self.gii_opacitySlider.value() / 100
         xray_mode = self.xrayCheckbox.isChecked()
 
-        if xray_mode:
-
-            # remove pyvista version if present
-            try:
-                self.plotter.remove_actor("gii_surface")
-            except Exception:
-                pass
-
-            # create vtk actor only once
-            if self.gii_overlay_actor is None:
-
-                mapper = vtk.vtkPolyDataMapper()
-                mapper.SetInputData(self.gii_mesh)
-
-                actor = vtk.vtkActor()
-                actor.SetMapper(mapper)
-
-                # actor.GetProperty().SetColor(0.97, 0.97, 1.0)
-                actor.SetForceOpaque(True)
-
-                self.plotter.renderer.AddActor(actor)
-
-                self.gii_overlay_actor = actor
-
-            # update vtk properties
-            self.gii_overlay_actor.GetProperty().SetOpacity(opacity)
-
-        else:
-
-            # remove vtk actor
-            if self.gii_overlay_actor is not None:
-                self.plotter.renderer.RemoveActor(self.gii_overlay_actor)
-                self.gii_overlay_actor = None
-
-            self.plotter.add_mesh(
-                self.gii_mesh,
-                color="ghostwhite",
-                culling="back",
-                smooth_shading=True,
-                opacity=opacity,
-                name="gii_surface",
-                reset_camera=reset_camera,
-                point_size=0,
-                render_lines_as_tubes=True,
-            )
-
-        self.plotter.render()
-
-    def remove_gii_overlay(self):
-
+        # remove vtk actor
         if self.gii_overlay_actor is not None:
-
-            self.plotter.RemoveActor(self.gii_overlay_actor)
-
+            self.plotter.renderer.RemoveActor(self.gii_overlay_actor)
             self.gii_overlay_actor = None
+
+        self.plotter.add_mesh(
+            self.gii_mesh,
+            color="ghostwhite",
+            culling="back",
+            smooth_shading=True,
+            opacity=opacity,
+            name="gii_surface",
+            reset_camera=reset_camera,
+            point_size=0,
+            render_lines_as_tubes=True,
+        )
+
+        # self.plotter.render()
 
 
 class OrthogonalViewer(QWidget):
@@ -941,17 +899,110 @@ class MainWindow(QMainWindow):
             self.actorDock.hide()
 
     def refreshActorList(self):
-        pass
+        """Rebuild the hierarchical actor list grouped by class."""
+        self.actorTree.blockSignals(True)
+        self.actorTree.clear()
 
-    def changeActorColor(self, item, column):
-        pass
+        # Groups
+        group_trk = QTreeWidgetItem(["TRK", ""])
+        group_nii = QTreeWidgetItem(["NIfTI Volume", ""])
+        group_roi = QTreeWidgetItem(["ROI Surfaces", ""])
+        group_gii = QTreeWidgetItem(["GIFTI", ""])
+
+        self.actorTree.addTopLevelItem(group_trk)
+        self.actorTree.addTopLevelItem(group_nii)
+        self.actorTree.addTopLevelItem(group_gii)
+        self.actorTree.addTopLevelItem(group_roi)
+        # Loop through PyVista actors
+        for name, actor in self.viewer.plotter.actors.items():
+
+            item = QTreeWidgetItem(["", "", name])
+
+            item.setCheckState(0, Qt.CheckState.Checked if actor.GetVisibility()
+                               else Qt.CheckState.Unchecked)
+
+            # Store name for callback
+            item.actor_name = name
+
+            if self.viewer.actor_types.get(name) == 'roi':
+
+                rgb = self.viewer.roi_colors.get(name, (1, 1, 1))
+
+                qcolor = QColor(int(rgb[0] * 255), int(rgb[1] * 255),
+                                int(rgb[2] * 255))
+                item.setBackground(1, qcolor)
+
+            # Insert into the correct group
+            if self.viewer.actor_types.get(name) == 'trk':
+                group_trk.addChild(item)
+            elif name.startswith("nii_"):
+                group_nii.addChild(item)
+            elif name.startswith("gii_"):
+                group_gii.addChild(item)
+            elif self.viewer.actor_types.get(name) == 'roi':
+                group_roi.addChild(item)
+            else:
+                group_trk.addChild(item)  # default bucket
+
+        self.actorTree.blockSignals(False)
 
     def onActorVisibilityChanged(self, item, column):
-        pass
+        """Toggle visibility when user clicks checkbox."""
+        if column != 0:
+            return
+
+        actor_name = item.actor_name
+        visible = item.checkState(0) == Qt.CheckState.Checked
+
+        try:
+            self.viewer.plotter.actors[actor_name].SetVisibility(visible)
+        except KeyError:
+            pass
+
+        self.viewer.roi_visibility[actor_name] = visible
+        self.ortho_viewer.roi_visibility[actor_name] = visible
+        self.ortho_viewer.update_views()
+
+        self.viewer.plotter.render()
+
+    def changeActorColor(self, item, column):
+
+        if column != 1:
+            return
+
+        actor_name = getattr(item, "actor_name", None)
+
+        if actor_name is None:
+            return
+
+        if self.viewer.actor_types.get(actor_name) != "roi":
+            return
+
+        color = QColorDialog.getColor()
+
+        if not color.isValid():
+            return
+
+        rgb = (color.red() / 255, color.green() / 255, color.blue() / 255)
+
+        self.viewer.roi_colors[actor_name] = rgb
+        if actor_name in self.ortho_viewer.rois:
+            self.ortho_viewer.rois[actor_name]["color"] = rgb
+            self.ortho_viewer.update_views()
+
+        item.setBackground(1, color)
+
+        try:
+            actor = self.viewer.plotter.actors[actor_name]
+            actor.GetProperty().SetColor(*rgb)
+            self.viewer.plotter.render()
+
+        except Exception:
+            pass
 
 
 if __name__ == '__main__':
     app = QApplication(sys.argv)
-    mainWin = MainWindow()
-    mainWin.show()
+    window = MainWindow()
+    window.show()
     sys.exit(app.exec())
