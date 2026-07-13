@@ -194,6 +194,21 @@ class TrkViewer(QWidget):
         self.x = 0
         self.y = 0
         self.z = 0
+        self.colormap_list = ['gray',
+                              'viridis', 'plasma', 'inferno', 'magma', 'cividis',
+                              'Greys', 'Purples', 'Blues', 'Greens', 'Oranges',
+                              'Reds', 'bone', 'pink', 'spring', 'summer',
+                              'autumn', 'winter', 'cool', 'Wistia', 'hot',
+                              'afmhot', 'gist_heat', 'copper', 'RdBu', 'RdYlBu',
+                              'RdYlGn', 'Spectral', 'coolwarm', 'bwr', 'seismic',
+                              'berlin', 'managua', 'vanimo', 'twilight',
+                              'twilight_shifted', 'hsv', 'Pastel1', 'Pastel2',
+                              'Paired', 'Accent', 'okabe_ito', 'Dark2', 'Set1',
+                              'Set2', 'Set3', 'tab10', 'tab20', 'tab20b', 'tab20c',
+                              'flag', 'prism', 'ocean', 'gist_earth', 'terrain',
+                              'gist_stern', 'gnuplot', 'gnuplot2', 'CMRmap',
+                              'cubehelix', 'brg', 'gist_rainbow', 'rainbow',
+                              'jet', 'turbo', 'nipy_spectral', 'gist_ncar']
         self.initUI()
         self.background = 'white'
         self.color_blind = False
@@ -254,7 +269,7 @@ class TrkViewer(QWidget):
         self.showPointsCheckbox.stateChanged.connect(self.update_trk_viewer)
         control_layout.addWidget(self.showPointsCheckbox)
 
-        self.colorMapLabel = QLabel('Color Map:')
+        self.colorMapLabel = QLabel('Tract Color Mode:')
         control_layout.addWidget(self.colorMapLabel)
 
         self.colorMapComboBox = QComboBox()
@@ -262,13 +277,17 @@ class TrkViewer(QWidget):
         self.colorMapComboBox.currentIndexChanged.connect(
             self.update_trk_viewer)
         control_layout.addWidget(self.colorMapComboBox)
-        self.colorMapEdit = QLineEdit()
-        self.colorMapEdit.textChanged.connect(self.update_trk_viewer)
-        self.colorMapEdit.setToolTip(
-            'Insert color map name. Name must be in the matplotlib library. Scalar nii.gz must be loaded.')
-        control_layout.addWidget(self.colorMapEdit)
 
-        self.volume_label = QLabel('Volume')
+        self.tractColorMapLabel = QLabel('Tract Colormap (Scalar):')
+        control_layout.addWidget(self.tractColorMapLabel)
+
+        self.tractColorMapComboBox = QComboBox()
+        self.tractColorMapComboBox.addItems(self.colormap_list)
+        self.tractColorMapComboBox.currentIndexChanged.connect(
+            self.update_trk_viewer)
+        control_layout.addWidget(self.tractColorMapComboBox)
+
+        self.volume_label = QLabel('Volume Opacity')
         control_layout.addWidget(self.volume_label)
 
         self.nii_opacitySlider = QSlider(Qt.Orientation.Horizontal, self)
@@ -277,6 +296,15 @@ class TrkViewer(QWidget):
         self.nii_opacitySlider.setValue(45)
         self.nii_opacitySlider.sliderReleased.connect(self.update_nii_viewer)
         control_layout.addWidget(self.nii_opacitySlider)
+
+        self.niiColorMapLabel = QLabel('Global Volume Colormap:')
+        control_layout.addWidget(self.niiColorMapLabel)
+
+        self.niiColorMapComboBox = QComboBox()
+        self.niiColorMapComboBox.addItems(self.colormap_list)
+        self.niiColorMapComboBox.currentIndexChanged.connect(
+            self.on_nii_colormap_changed)
+        control_layout.addWidget(self.niiColorMapComboBox)
 
         self.showSlicesCheckbox = QCheckBox('Show Slices')
         self.showSlicesCheckbox.stateChanged.connect(self.update_nii_viewer)
@@ -368,8 +396,10 @@ class TrkViewer(QWidget):
         self.update_nii_viewer(reset_camera=False)
         self.window().refreshActorList()
 
+        # Update 2D view with current colormap
         self.nii_data[self.nii_data == 0] = None
         self.window().ortho_viewer.set_volume(self.nii_data, self.nii_affine)
+        self.window().ortho_viewer.set_colormap(self.niiColorMapComboBox.currentText())
 
     def loadROIFile(self):
         """Load one or multiple ROI nifti volumes and render as surfaces."""
@@ -491,20 +521,25 @@ class TrkViewer(QWidget):
             self.plotter.render()
         offscreen.close()
 
+    def on_nii_colormap_changed(self):
+        self.update_nii_viewer()
+        if hasattr(self.window(), 'ortho_viewer'):
+            self.window().ortho_viewer.set_colormap(self.niiColorMapComboBox.currentText())
+
     def update_trk_viewer(self, reset_camera: bool = False):
 
         opacity = self.opacitySlider.value() / 100.0
         show_points = self.showPointsCheckbox.isChecked()
 
-        color_map = self.colorMapComboBox.currentText()
-        if color_map == 'flesh':
+        color_mode = self.colorMapComboBox.currentText()
+        if color_mode == 'flesh':
             color_map = 'flesh'
             scalar = None
-        elif color_map == 'rgb':
+        elif color_mode == 'rgb':
             color_map = 'plasma'
             scalar = None
         else:
-            color_map = self.colorMapEdit.text()
+            color_map = self.tractColorMapComboBox.currentText()
             scalar = self.nii_data
 
         for file in list(self.actor_types):
@@ -518,14 +553,15 @@ class TrkViewer(QWidget):
 
     def _update_slice(self, axis, actor_name):
 
-        if self.showSlicesCheckbox.isChecked():
+        if self.showSlicesCheckbox.isChecked() and self.grid is not None:
 
             center = (self.XSlider.value(), self.YSlider.value(),
                       self.ZSlider.value())
 
             slice_mesh = self.grid.slice(axis, origin=center)
+            cmap_name = self.niiColorMapComboBox.currentText()
 
-            self.plotter.add_mesh(slice_mesh, cmap='grey', name=actor_name,
+            self.plotter.add_mesh(slice_mesh, cmap=cmap_name, name=actor_name,
                                   show_scalar_bar=False, point_size=0,
                                   render_lines_as_tubes=True,
                                   reset_camera=False,
@@ -535,25 +571,41 @@ class TrkViewer(QWidget):
             self.plotter.remove_actor(actor_name)
 
     def update_nii_viewer(self, reset_camera: bool = False):
+        if self.grid is None:
+            return
 
         self._update_slice('x', 'nii_x')
         self._update_slice('y', 'nii_y')
         self._update_slice('z', 'nii_z')
 
         opacity = self.nii_opacitySlider.value()/1000
-        self.plotter.add_volume(self.grid, cmap='gray', opacity=[0, opacity],
+        cmap_name = self.niiColorMapComboBox.currentText()
+
+        self.plotter.add_volume(self.grid, cmap=cmap_name, opacity=[0, opacity],
                                 show_scalar_bar=False, name='nii_volume',
                                 reset_camera=reset_camera,
                                 user_matrix=self.nii_affine)
 
-    def update_gii_viewer(self, reset_camera: bool = False):
+    def update_gii_viewer(self, reset_camera=False):
 
-        opacity = self.gii_opacitySlider.value()/100
-        self.plotter.add_mesh(self.gii_mesh, color="ghostwhite",
-                              culling='back', smooth_shading=True,
-                              opacity=opacity, name='gii_surface',
-                              reset_camera=reset_camera, point_size=0,
-                              render_lines_as_tubes=True,)
+        if not hasattr(self, "gii_mesh"):
+            return
+
+        opacity = self.gii_opacitySlider.value() / 100
+
+        self.plotter.add_mesh(
+            self.gii_mesh,
+            color="ghostwhite",
+            culling="back",
+            smooth_shading=True,
+            opacity=opacity,
+            name="gii_surface",
+            reset_camera=reset_camera,
+            point_size=0,
+            render_lines_as_tubes=True,
+        )
+
+        # self.plotter.render()
 
 
 class OrthogonalViewer(QWidget):
@@ -563,6 +615,7 @@ class OrthogonalViewer(QWidget):
 
         self.volume = None
         self.affine = None
+        self.cmap = "gray"
 
         self.rois = {}
         self.roi_visibility = {}
@@ -608,6 +661,10 @@ class OrthogonalViewer(QWidget):
 
         self.update_views()
 
+    def set_colormap(self, cmap_name):
+        self.cmap = cmap_name
+        self.update_views()
+
     def add_roi(self, name, roi, color):
 
         self.rois[name] = {"data": roi, "color": color}
@@ -644,9 +701,9 @@ class OrthogonalViewer(QWidget):
         for ax in (self.ax_axial, self.ax_coronal, self.ax_sagittal):
             ax.axis("off")
 
-        self.ax_axial.imshow(np.rot90(axial), cmap="gray", vmin=0)
-        self.ax_coronal.imshow(np.rot90(coronal), cmap="gray", vmin=0)
-        self.ax_sagittal.imshow(np.rot90(sagittal), cmap="gray", vmin=0)
+        self.ax_axial.imshow(np.rot90(axial), cmap=self.cmap, vmin=0)
+        self.ax_coronal.imshow(np.rot90(coronal), cmap=self.cmap, vmin=0)
+        self.ax_sagittal.imshow(np.rot90(sagittal), cmap=self.cmap, vmin=0)
 
         for name, roi_info in self.rois.items():
 
@@ -661,14 +718,6 @@ class OrthogonalViewer(QWidget):
             self.draw_roi(self.ax_sagittal, np.rot90(roi[x, :, :]), color)
 
         self.canvas.draw_idle()
-
-        # self.window().viewer.XSlider.setValue(self.x)
-        # self.window().viewer.YSlider.setValue(self.y)
-        # self.window().viewer.ZSlider.setValue(self.z)
-
-        # self.window().viewer._update_slice('x', 'nii_x')
-        # self.window().viewer._update_slice('y', 'nii_y')
-        # self.window().viewer._update_slice('z', 'nii_z')
 
     def take_screenshot(self):
 
