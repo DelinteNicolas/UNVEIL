@@ -255,127 +255,167 @@ class TrkViewer(QWidget):
         # Left side: Control panel
         control_widget = QWidget()
         control_layout = QVBoxLayout(control_widget)
-        control_widget.setMaximumWidth(250)
+        control_widget.setMaximumWidth(260)
 
+        # Tractography
+        trk_group = QGroupBox("TRK / Tractography")
+        trk_layout = QVBoxLayout(trk_group)
+
+        opacity_trk_row = QHBoxLayout()
+        opacity_trk_row.setSpacing(5)
         self.opacityLabel = QLabel('Opacity:')
-        control_layout.addWidget(self.opacityLabel)
-
+        opacity_trk_row.addWidget(self.opacityLabel)
         self.opacitySlider = QSlider(Qt.Orientation.Horizontal, self)
         self.opacitySlider.setMinimum(1)
         self.opacitySlider.setMaximum(100)
         self.opacitySlider.setValue(100)
         self.opacitySlider.sliderReleased.connect(self.update_trk_viewer)
-        control_layout.addWidget(self.opacitySlider)
+        opacity_trk_row.addWidget(self.opacitySlider)
+        trk_layout.addLayout(opacity_trk_row)
 
-        self.showPointsCheckbox = QCheckBox('Show Points')
-        self.showPointsCheckbox.stateChanged.connect(self.update_trk_viewer)
-        control_layout.addWidget(self.showPointsCheckbox)
-
-        self.colorMapLabel = QLabel('Tract Color Mode:')
-        control_layout.addWidget(self.colorMapLabel)
-
+        color_mode_trk_row = QHBoxLayout()
+        color_mode_trk_row.setSpacing(5)
+        self.colorMapLabel = QLabel('Color Mode:')
+        color_mode_trk_row.addWidget(self.colorMapLabel)
         self.colorMapComboBox = QComboBox()
         self.colorMapComboBox.addItems(['rgb', 'flesh', 'scalar'])
         self.colorMapComboBox.currentIndexChanged.connect(
             self.update_trk_viewer)
-        control_layout.addWidget(self.colorMapComboBox)
+        color_mode_trk_row.addWidget(self.colorMapComboBox)
+        trk_layout.addLayout(color_mode_trk_row)
 
-        self.tractColorMapLabel = QLabel('Tract Colormap (Scalar):')
-        control_layout.addWidget(self.tractColorMapLabel)
-
+        colormap_trk_row = QHBoxLayout()
+        colormap_trk_row.setSpacing(5)
+        self.tractColorMapLabel = QLabel('Colormap (Scalar):')
+        colormap_trk_row.addWidget(self.tractColorMapLabel)
         self.tractColorMapComboBox = QComboBox()
         self.tractColorMapComboBox.addItems(self.colormap_list)
         self.tractColorMapComboBox.currentIndexChanged.connect(
             self.update_trk_viewer)
-        control_layout.addWidget(self.tractColorMapComboBox)
+        colormap_trk_row.addWidget(self.tractColorMapComboBox)
+        trk_layout.addLayout(colormap_trk_row)
 
-        self.volume_label = QLabel('Volume Opacity')
-        control_layout.addWidget(self.volume_label)
+        self.showPointsCheckbox = QCheckBox('Show Points')
+        self.showPointsCheckbox.stateChanged.connect(self.update_trk_viewer)
+        trk_layout.addWidget(self.showPointsCheckbox)
 
+        control_layout.addWidget(trk_group)
+
+        # Volume
+        nii_group = QGroupBox("NIfTI / Volume")
+        nii_layout = QVBoxLayout(nii_group)
+
+        opacity_nii_row = QHBoxLayout()
+        opacity_nii_row.setSpacing(5)
+        self.volume_label = QLabel('Opacity:')
+        opacity_nii_row.addWidget(self.volume_label)
         self.nii_opacitySlider = QSlider(Qt.Orientation.Horizontal, self)
         self.nii_opacitySlider.setMinimum(0)
         self.nii_opacitySlider.setMaximum(1000)
         self.nii_opacitySlider.setValue(45)
         self.nii_opacitySlider.sliderReleased.connect(self.update_nii_viewer)
-        control_layout.addWidget(self.nii_opacitySlider)
+        opacity_nii_row.addWidget(self.nii_opacitySlider)
+        nii_layout.addLayout(opacity_nii_row)
 
-        self.niiColorMapLabel = QLabel('Global Volume Colormap:')
-        control_layout.addWidget(self.niiColorMapLabel)
-
+        colormap_nii_row = QHBoxLayout()
+        colormap_nii_row.setSpacing(5)
+        self.niiColorMapLabel = QLabel('Colormap:')
+        colormap_nii_row.addWidget(self.niiColorMapLabel)
         self.niiColorMapComboBox = QComboBox()
         self.niiColorMapComboBox.addItems(self.colormap_list)
         self.niiColorMapComboBox.currentIndexChanged.connect(
             self.on_nii_colormap_changed)
-        control_layout.addWidget(self.niiColorMapComboBox)
+        colormap_nii_row.addWidget(self.niiColorMapComboBox)
+        nii_layout.addLayout(colormap_trk_row)
 
         self.showSlicesCheckbox = QCheckBox('Show Slices')
         self.showSlicesCheckbox.stateChanged.connect(self.update_nii_viewer)
-        control_layout.addWidget(self.showSlicesCheckbox)
+        nii_layout.addWidget(self.showSlicesCheckbox)
 
-        self.x_label = QLabel('X')
-        control_layout.addWidget(self.x_label)
+        x_nii_row = QHBoxLayout()
+        x_nii_row.setSpacing(5)
+        self.x_label = QLabel('X:')
+        x_nii_row.addWidget(self.x_label)
         self.XSlider = QSlider(Qt.Orientation.Horizontal, self)
         self.XSlider.setMinimum(0)
         self.XSlider.setMaximum(100)
         self.XSlider.setValue(100)
         self.XSlider.sliderReleased.connect(
             lambda: self._update_slice('x', 'nii_x'))
-        control_layout.addWidget(self.XSlider)
-        self.y_label = QLabel('Y')
-        control_layout.addWidget(self.y_label)
+        x_nii_row.addWidget(self.XSlider)
+        nii_layout.addLayout(x_nii_row)
+        y_nii_row = QHBoxLayout()
+        y_nii_row.setSpacing(5)
+        self.y_label = QLabel('Y:')
+        y_nii_row.addWidget(self.y_label)
         self.YSlider = QSlider(Qt.Orientation.Horizontal, self)
         self.YSlider.setMinimum(0)
         self.YSlider.setMaximum(100)
         self.YSlider.setValue(100)
         self.YSlider.sliderReleased.connect(
             lambda: self._update_slice('y', 'nii_y'))
-        control_layout.addWidget(self.YSlider)
-        self.z_label = QLabel('Z')
-        control_layout.addWidget(self.z_label)
+        y_nii_row.addWidget(self.YSlider)
+        nii_layout.addLayout(y_nii_row)
+        z_nii_row = QHBoxLayout()
+        z_nii_row.setSpacing(5)
+        self.z_label = QLabel('Z:')
+        z_nii_row.addWidget(self.z_label)
         self.ZSlider = QSlider(Qt.Orientation.Horizontal, self)
         self.ZSlider.setMinimum(0)
         self.ZSlider.setMaximum(100)
         self.ZSlider.setValue(100)
         self.ZSlider.sliderReleased.connect(
             lambda: self._update_slice('z', 'nii_z'))
-        control_layout.addWidget(self.ZSlider)
+        z_nii_row.addWidget(self.ZSlider)
+        nii_layout.addLayout(z_nii_row)
+
+        control_layout.addWidget(nii_group)
 
         # Gifti
         surface_group = QGroupBox("GIFTI / Surface")
-        surface_layout = QVBoxLayout(surface_group)
+        gii_layout = QVBoxLayout(surface_group)
 
+        opacity_gii_row = QHBoxLayout()
+        opacity_gii_row.setSpacing(5)
         self.gii_opacityLabel = QLabel('Opacity:')
-        surface_layout.addWidget(self.gii_opacityLabel)
+        opacity_gii_row.addWidget(self.gii_opacityLabel)
         self.gii_opacitySlider = QSlider(Qt.Orientation.Horizontal, self)
         self.gii_opacitySlider.setMinimum(0)
         self.gii_opacitySlider.setMaximum(100)
         self.gii_opacitySlider.setValue(15)
         self.gii_opacitySlider.sliderReleased.connect(self.update_gii_viewer)
-        surface_layout.addWidget(self.gii_opacitySlider)
+        opacity_gii_row.addWidget(self.gii_opacitySlider)
+        gii_layout.addLayout(opacity_gii_row)
 
+        color_mode_gii_row = QHBoxLayout()
+        color_mode_gii_row.setSpacing(5)
         self.surfaceColorModeLabel = QLabel('Color Mode:')
-        surface_layout.addWidget(self.surfaceColorModeLabel)
+        color_mode_gii_row.addWidget(self.surfaceColorModeLabel)
         self.surfaceColorModeComboBox = QComboBox()
         self.surfaceColorModeComboBox.addItems(['Solid', 'NIfTI values'])
         self.surfaceColorModeComboBox.currentIndexChanged.connect(
             self.update_gii_viewer)
-        surface_layout.addWidget(self.surfaceColorModeComboBox)
+        color_mode_gii_row.addWidget(self.surfaceColorModeComboBox)
+        gii_layout.addLayout(color_mode_gii_row)
 
+        colormap_gii_row = QHBoxLayout()
+        colormap_gii_row.setSpacing(5)
         self.surfaceColorMapLabel = QLabel('Colormap:')
-        surface_layout.addWidget(self.surfaceColorMapLabel)
+        colormap_gii_row.addWidget(self.surfaceColorMapLabel)
         self.surfaceColorMapComboBox = QComboBox()
         self.surfaceColorMapComboBox.addItems(self.colormap_list)
         self.surfaceColorMapComboBox.setCurrentText('viridis')
         self.surfaceColorMapComboBox.currentIndexChanged.connect(
             self.update_gii_viewer)
-        surface_layout.addWidget(self.surfaceColorMapComboBox)
+        colormap_gii_row.addWidget(self.surfaceColorMapComboBox)
+        gii_layout.addLayout(colormap_gii_row)
 
         range_layout = QHBoxLayout()
 
         min_layout = QVBoxLayout()
         self.surfaceMinLabel = QLabel('Min:')
         self.surfaceMinSpinBox = QDoubleSpinBox()
-        self.surfaceMinSpinBox.setDecimals(4)
+        self.surfaceMinSpinBox.setDecimals(2)
         self.surfaceMinSpinBox.setRange(-1e6, 1e6)
         self.surfaceMinSpinBox.setSingleStep(0.1)
         self.surfaceMinSpinBox.setValue(0.0)
@@ -386,7 +426,7 @@ class TrkViewer(QWidget):
         max_layout = QVBoxLayout()
         self.surfaceMaxLabel = QLabel('Max:')
         self.surfaceMaxSpinBox = QDoubleSpinBox()
-        self.surfaceMaxSpinBox.setDecimals(4)
+        self.surfaceMaxSpinBox.setDecimals(2)
         self.surfaceMaxSpinBox.setRange(-1e6, 1e6)
         self.surfaceMaxSpinBox.setSingleStep(0.1)
         self.surfaceMaxSpinBox.setValue(1.0)
@@ -396,8 +436,10 @@ class TrkViewer(QWidget):
 
         range_layout.addLayout(min_layout)
         range_layout.addLayout(max_layout)
-        surface_layout.addLayout(range_layout)
+        gii_layout.addLayout(range_layout)
         control_layout.addWidget(surface_group)
+
+        self.update_surface_color_controls()
 
         # Add the control panel layout to the main layout
         main_layout.addWidget(control_widget)
@@ -660,6 +702,8 @@ class TrkViewer(QWidget):
         if not hasattr(self, "gii_mesh"):
             return
 
+        self.update_surface_color_controls()
+
         opacity = self.gii_opacitySlider.value() / 100.0
 
         color_mode = self.surfaceColorModeComboBox.currentText()
@@ -853,6 +897,7 @@ class TrkViewer(QWidget):
 
     def sample_nifti_on_surface2(self, mesh):
         """
+        !!! Currently unused
         Sample the currently loaded NIfTI volume at every GIFTI surface vertex.
 
         GIFTI vertices are assumed to be in world/mm coordinates.
@@ -906,6 +951,21 @@ class TrkViewer(QWidget):
         ]
 
         return values
+
+    def update_surface_color_controls(self):
+        """Enable surface scalar controls only when using NIfTI values."""
+
+        use_nifti = (self.surfaceColorModeComboBox.currentText()
+                     == "NIfTI values")
+
+        self.surfaceColorMapLabel.setEnabled(use_nifti)
+        self.surfaceColorMapComboBox.setEnabled(use_nifti)
+
+        self.surfaceMinLabel.setEnabled(use_nifti)
+        self.surfaceMinSpinBox.setEnabled(use_nifti)
+
+        self.surfaceMaxLabel.setEnabled(use_nifti)
+        self.surfaceMaxSpinBox.setEnabled(use_nifti)
 
 
 class OrthogonalViewer(QWidget):
