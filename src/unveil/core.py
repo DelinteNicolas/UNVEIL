@@ -14,7 +14,8 @@ from PyQt6.QtWidgets import (QApplication, QWidget, QHBoxLayout, QVBoxLayout,
                              QPushButton, QFileDialog, QCheckBox, QSlider,
                              QLabel, QComboBox, QMainWindow, QLineEdit,
                              QDockWidget, QTreeWidget, QTreeWidgetItem,
-                             QColorDialog, QTabWidget)
+                             QColorDialog, QTabWidget, QDoubleSpinBox,
+                             QGroupBox)
 from PyQt6.QtGui import QAction, QColor
 from dipy.io.streamline import load_tractogram
 from matplotlib import pyplot as plt
@@ -22,6 +23,7 @@ from matplotlib.colors import LinearSegmentedColormap
 from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg
 from matplotlib.figure import Figure
 # from unravel.utils import get_streamline_density
+from binama.utils import dilate_atlas_labels
 
 
 def gifti_to_pyvista(gii_path):
@@ -339,15 +341,63 @@ class TrkViewer(QWidget):
         control_layout.addWidget(self.ZSlider)
 
         # Gifti
-        self.surface_label = QLabel('Surface')
-        control_layout.addWidget(self.surface_label)
+        surface_group = QGroupBox("GIFTI / Surface")
+        surface_layout = QVBoxLayout(surface_group)
 
+        self.gii_opacityLabel = QLabel('Opacity:')
+        surface_layout.addWidget(self.gii_opacityLabel)
         self.gii_opacitySlider = QSlider(Qt.Orientation.Horizontal, self)
         self.gii_opacitySlider.setMinimum(0)
         self.gii_opacitySlider.setMaximum(100)
         self.gii_opacitySlider.setValue(15)
         self.gii_opacitySlider.sliderReleased.connect(self.update_gii_viewer)
-        control_layout.addWidget(self.gii_opacitySlider)
+        surface_layout.addWidget(self.gii_opacitySlider)
+
+        self.surfaceColorModeLabel = QLabel('Color Mode:')
+        surface_layout.addWidget(self.surfaceColorModeLabel)
+        self.surfaceColorModeComboBox = QComboBox()
+        self.surfaceColorModeComboBox.addItems(['Solid', 'NIfTI values'])
+        self.surfaceColorModeComboBox.currentIndexChanged.connect(
+            self.update_gii_viewer)
+        surface_layout.addWidget(self.surfaceColorModeComboBox)
+
+        self.surfaceColorMapLabel = QLabel('Colormap:')
+        surface_layout.addWidget(self.surfaceColorMapLabel)
+        self.surfaceColorMapComboBox = QComboBox()
+        self.surfaceColorMapComboBox.addItems(self.colormap_list)
+        self.surfaceColorMapComboBox.setCurrentText('viridis')
+        self.surfaceColorMapComboBox.currentIndexChanged.connect(
+            self.update_gii_viewer)
+        surface_layout.addWidget(self.surfaceColorMapComboBox)
+
+        range_layout = QHBoxLayout()
+
+        min_layout = QVBoxLayout()
+        self.surfaceMinLabel = QLabel('Min:')
+        self.surfaceMinSpinBox = QDoubleSpinBox()
+        self.surfaceMinSpinBox.setDecimals(4)
+        self.surfaceMinSpinBox.setRange(-1e6, 1e6)
+        self.surfaceMinSpinBox.setSingleStep(0.1)
+        self.surfaceMinSpinBox.setValue(0.0)
+        self.surfaceMinSpinBox.editingFinished.connect(self.update_gii_viewer)
+        min_layout.addWidget(self.surfaceMinLabel)
+        min_layout.addWidget(self.surfaceMinSpinBox)
+
+        max_layout = QVBoxLayout()
+        self.surfaceMaxLabel = QLabel('Max:')
+        self.surfaceMaxSpinBox = QDoubleSpinBox()
+        self.surfaceMaxSpinBox.setDecimals(4)
+        self.surfaceMaxSpinBox.setRange(-1e6, 1e6)
+        self.surfaceMaxSpinBox.setSingleStep(0.1)
+        self.surfaceMaxSpinBox.setValue(1.0)
+        self.surfaceMaxSpinBox.editingFinished.connect(self.update_gii_viewer)
+        max_layout.addWidget(self.surfaceMaxLabel)
+        max_layout.addWidget(self.surfaceMaxSpinBox)
+
+        range_layout.addLayout(min_layout)
+        range_layout.addLayout(max_layout)
+        surface_layout.addLayout(range_layout)
+        control_layout.addWidget(surface_group)
 
         # Add the control panel layout to the main layout
         main_layout.addWidget(control_widget)
@@ -384,6 +434,8 @@ class TrkViewer(QWidget):
             self.nii_affine = img.affine
             self.nii_data = img.get_fdata()
 
+            self.update_surface_color_range_from_nifti()
+
             grid = pv.ImageData()
             grid.dimensions = np.array(self.nii_data.shape) + 1
             grid.cell_data['values'] = self.nii_data.flatten(order='F')
@@ -394,11 +446,15 @@ class TrkViewer(QWidget):
         self.ZSlider.setMaximum(self.nii_data.shape[2])
 
         self.update_nii_viewer(reset_camera=False)
+        if hasattr(self, "gii_mesh"):
+            self.update_gii_viewer(reset_camera=False)
         self.window().refreshActorList()
 
         # Update 2D view with current colormap
-        self.nii_data[self.nii_data == 0] = None
-        self.window().ortho_viewer.set_volume(self.nii_data, self.nii_affine)
+        ortho_data = self.nii_data.copy()
+        ortho_data[ortho_data == 0] = None
+
+        self.window().ortho_viewer.set_volume(ortho_data, self.nii_affine)
         self.window().ortho_viewer.set_colormap(self.niiColorMapComboBox.currentText())
 
     def loadROIFile(self):
@@ -442,11 +498,23 @@ class TrkViewer(QWidget):
 
     def loadGiftiFile(self):
         options = QFileDialog.Options()
+
         filePath, _ = QFileDialog.getOpenFileName(
-            self, "Open .gii File", "", "Gifti Files (*.gii)", options=options)
-        if filePath:
-            print(f"Loaded GIfTI file: {filePath}")
-            self.gii_mesh = gifti_to_pyvista(filePath)
+            self,
+            "Open .gii File",
+            "",
+            "Gifti Files (*.gii)",
+            options=options
+        )
+
+        if not filePath:
+            return
+
+        print(f"Loaded GIFTI file: {filePath}")
+
+        self.gii_mesh = gifti_to_pyvista(filePath)
+
+        self.actor_types["gii_surface"] = "gii"
 
         self.update_gii_viewer(reset_camera=False)
         self.window().refreshActorList()
@@ -587,25 +655,257 @@ class TrkViewer(QWidget):
                                 user_matrix=self.nii_affine)
 
     def update_gii_viewer(self, reset_camera=False):
+        """Update the GIFTI surface rendering."""
 
         if not hasattr(self, "gii_mesh"):
             return
 
-        opacity = self.gii_opacitySlider.value() / 100
+        opacity = self.gii_opacitySlider.value() / 100.0
 
-        self.plotter.add_mesh(
-            self.gii_mesh,
-            color="ghostwhite",
-            culling="back",
-            smooth_shading=True,
-            opacity=opacity,
-            name="gii_surface",
-            reset_camera=reset_camera,
-            point_size=0,
-            render_lines_as_tubes=True,
+        color_mode = self.surfaceColorModeComboBox.currentText()
+
+        # Remove the existing surface before adding the updated version.
+        if "gii_surface" in self.plotter.actors:
+            self.plotter.remove_actor("gii_surface")
+
+        # --------------------------------------------------------------
+        # Solid color
+        # --------------------------------------------------------------
+        if color_mode == "Solid":
+
+            self.plotter.add_mesh(
+                self.gii_mesh,
+                color="ghostwhite",
+                culling="back",
+                smooth_shading=True,
+                opacity=opacity,
+                name="gii_surface",
+                reset_camera=reset_camera,
+                point_size=0,
+                render_lines_as_tubes=True,
+            )
+
+        # --------------------------------------------------------------
+        # Color according to NIfTI
+        # --------------------------------------------------------------
+        elif color_mode == "NIfTI values":
+
+            if self.nii_data is None:
+                # No NIfTI loaded: fall back to solid color
+                self.plotter.add_mesh(
+                    self.gii_mesh,
+                    color="ghostwhite",
+                    culling="back",
+                    smooth_shading=True,
+                    opacity=opacity,
+                    name="gii_surface",
+                    reset_camera=reset_camera,
+                    point_size=0,
+                    render_lines_as_tubes=True,
+                )
+                return
+
+            # Sample NIfTI values at each surface vertex
+            scalars = self.sample_nifti_on_surface(self.gii_mesh)
+
+            if scalars is None:
+                return
+
+            # Copy the mesh so that the original GIFTI mesh is not modified
+            surface_mesh = self.gii_mesh.copy(deep=True)
+            surface_mesh.point_data["NIfTI values"] = scalars
+
+            cmap_name = self.surfaceColorMapComboBox.currentText()
+
+            vmin = self.surfaceMinSpinBox.value()
+            vmax = self.surfaceMaxSpinBox.value()
+
+            # Protect against an invalid range
+            if vmax <= vmin:
+                vmax = vmin + 1e-6
+
+            self.plotter.add_mesh(
+                surface_mesh,
+                scalars="NIfTI values",
+                cmap=cmap_name,
+                clim=[vmin, vmax],
+                culling="back",
+                # nan_color="red",
+                smooth_shading=True,
+                opacity=opacity,
+                name="gii_surface",
+                reset_camera=reset_camera,
+                point_size=0,
+                render_lines_as_tubes=True,
+                show_scalar_bar=False,
+            )
+
+        self.plotter.render()
+
+    def update_surface_color_range_from_nifti(self):
+
+        if self.nii_data is None:
+            return
+
+        data = np.asarray(self.nii_data, dtype=float)
+        finite = np.isfinite(data)
+
+        if not np.any(finite):
+            return
+
+        values = data[finite]
+
+        vmin = float(np.min(values))
+        vmax = float(np.max(values))
+
+        # Avoid identical limits because PyVista/VTK does not like
+        # clim=[x, x].
+        if np.isclose(vmin, vmax):
+            vmax = vmin + 1.0
+
+        self.surfaceMinSpinBox.blockSignals(True)
+        self.surfaceMaxSpinBox.blockSignals(True)
+
+        self.surfaceMinSpinBox.setValue(vmin)
+        self.surfaceMaxSpinBox.setValue(vmax)
+
+        self.surfaceMinSpinBox.blockSignals(False)
+        self.surfaceMaxSpinBox.blockSignals(False)
+
+    def sample_nifti_on_surface(self, mesh):
+        """
+        Trilinearly sample the NIfTI volume onto the surface.
+
+        Vertices outside the NIfTI are assigned NaN.
+        """
+
+        if self.nii_data is None or not hasattr(self, "nii_affine"):
+            return None
+
+        volume = np.asarray(self.nii_data, dtype=np.float64)
+        # !!! slow step
+        volume = dilate_atlas_labels(volume, dilation_width=4)
+        volume = np.where(volume == 0, np.nan, volume)
+        points_world = np.asarray(mesh.points, dtype=np.float64)
+
+        inv_affine = np.linalg.inv(self.nii_affine)
+
+        homogeneous = np.column_stack([
+            points_world,
+            np.ones(len(points_world))
+        ])
+
+        points_voxel = (homogeneous @ inv_affine.T)[:, :3]
+
+        nx, ny, nz = volume.shape[:3]
+
+        # Identify points that are actually inside the NIfTI
+        inside = (
+            (points_voxel[:, 0] >= 0) &
+            (points_voxel[:, 0] <= nx - 1) &
+            (points_voxel[:, 1] >= 0) &
+            (points_voxel[:, 1] <= ny - 1) &
+            (points_voxel[:, 2] >= 0) &
+            (points_voxel[:, 2] <= nz - 1)
         )
 
-        # self.plotter.render()
+        # Clip only for interpolation
+        x = np.clip(points_voxel[:, 0], 0, nx - 1)
+        y = np.clip(points_voxel[:, 1], 0, ny - 1)
+        z = np.clip(points_voxel[:, 2], 0, nz - 1)
+
+        x0 = np.floor(x).astype(int)
+        y0 = np.floor(y).astype(int)
+        z0 = np.floor(z).astype(int)
+
+        x1 = np.minimum(x0 + 1, nx - 1)
+        y1 = np.minimum(y0 + 1, ny - 1)
+        z1 = np.minimum(z0 + 1, nz - 1)
+
+        xd = x - x0
+        yd = y - y0
+        zd = z - z0
+
+        c000 = volume[x0, y0, z0]
+        c001 = volume[x0, y0, z1]
+        c010 = volume[x0, y1, z0]
+        c011 = volume[x0, y1, z1]
+
+        c100 = volume[x1, y0, z0]
+        c101 = volume[x1, y0, z1]
+        c110 = volume[x1, y1, z0]
+        c111 = volume[x1, y1, z1]
+
+        c00 = c000 * (1 - xd) + c100 * xd
+        c01 = c001 * (1 - xd) + c101 * xd
+        c10 = c010 * (1 - xd) + c110 * xd
+        c11 = c011 * (1 - xd) + c111 * xd
+
+        c0 = c00 * (1 - yd) + c10 * yd
+        c1 = c01 * (1 - yd) + c11 * yd
+
+        values = c0 * (1 - zd) + c1 * zd
+
+        # Outside the NIfTI = NaN
+        values[~inside] = np.nan
+
+        return values.astype(np.float32)
+
+    def sample_nifti_on_surface2(self, mesh):
+        """
+        Sample the currently loaded NIfTI volume at every GIFTI surface vertex.
+
+        GIFTI vertices are assumed to be in world/mm coordinates.
+        The NIfTI affine is used to convert them into voxel coordinates.
+
+        Nearest-neighbor sampling is used.
+        """
+
+        if self.nii_data is None:
+            return None
+
+        if not hasattr(self, 'nii_affine'):
+            return None
+
+        vertices_world = np.asarray(mesh.points)
+
+        # Convert world coordinates -> NIfTI voxel coordinates
+        inv_affine = np.linalg.inv(self.nii_affine)
+
+        homogeneous = np.column_stack([
+            vertices_world,
+            np.ones(len(vertices_world))
+        ])
+
+        vertices_voxel = (homogeneous @ inv_affine.T)[:, :3]
+
+        # Nearest-neighbor voxel coordinates
+        vertices_voxel = np.rint(vertices_voxel).astype(int)
+
+        shape = self.nii_data.shape
+
+        # Determine which vertices are inside the NIfTI
+        valid = (
+            (vertices_voxel[:, 0] >= 0) &
+            (vertices_voxel[:, 0] < shape[0]) &
+            (vertices_voxel[:, 1] >= 0) &
+            (vertices_voxel[:, 1] < shape[1]) &
+            (vertices_voxel[:, 2] >= 0) &
+            (vertices_voxel[:, 2] < shape[2])
+        )
+
+        # Initialize outside-of-volume vertices with NaN
+        values = np.full(len(vertices_world), np.nan, dtype=np.float32)
+
+        valid_voxels = vertices_voxel[valid]
+
+        values[valid] = self.nii_data[
+            valid_voxels[:, 0],
+            valid_voxels[:, 1],
+            valid_voxels[:, 2]
+        ]
+
+        return values
 
 
 class OrthogonalViewer(QWidget):
