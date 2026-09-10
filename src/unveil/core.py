@@ -326,7 +326,7 @@ class TrkViewer(QWidget):
         self.niiColorMapComboBox.currentIndexChanged.connect(
             self.on_nii_colormap_changed)
         colormap_nii_row.addWidget(self.niiColorMapComboBox)
-        nii_layout.addLayout(colormap_trk_row)
+        nii_layout.addLayout(colormap_nii_row)
 
         self.showSlicesCheckbox = QCheckBox('Show Slices')
         self.showSlicesCheckbox.stateChanged.connect(self.update_nii_viewer)
