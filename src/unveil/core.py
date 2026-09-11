@@ -527,6 +527,12 @@ class TrkViewer(QWidget):
         ortho_data = self.nii_data.copy()
         ortho_data[ortho_data == 0] = None
 
+        # Dilation for surface
+        self.nii_data_dilated = dilate_atlas_labels(
+            self.nii_data, dilation_width=4)
+        self.nii_data_dilated = np.where(self.nii_data_dilated == 0, np.nan,
+                                         self.nii_data_dilated)
+
         self.window().ortho_viewer.set_volume(ortho_data, self.nii_affine)
         self.window().ortho_viewer.set_colormap(self.niiColorMapComboBox.currentText())
 
@@ -746,9 +752,9 @@ class TrkViewer(QWidget):
 
         color_mode = self.giiColorModeComboBox.currentText()
 
-        # Remove the existing surface before adding the updated version.
-        if "gii_surface" in self.plotter.actors:
-            self.plotter.remove_actor("gii_surface")
+        # # Remove the existing surface before adding the updated version.
+        # if "gii_surface" in self.plotter.actors:
+        #     self.plotter.remove_actor("gii_surface")
 
         # --------------------------------------------------------------
         # Solid color
@@ -894,10 +900,8 @@ class TrkViewer(QWidget):
         if self.nii_data is None or not hasattr(self, "nii_affine"):
             return None
 
-        volume = np.asarray(self.nii_data, dtype=np.float64)
-        # !!! slow step
-        volume = dilate_atlas_labels(volume, dilation_width=4)
-        volume = np.where(volume == 0, np.nan, volume)
+        volume = np.asarray(self.nii_data_dilated, dtype=np.float64)
+
         points_world = np.asarray(mesh.points, dtype=np.float64)
 
         inv_affine = np.linalg.inv(self.nii_affine)
