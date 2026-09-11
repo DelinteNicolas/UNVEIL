@@ -722,8 +722,8 @@ class TrkViewer(QWidget):
         opacity = self.nii_opacitySlider.value()/1000
         cmap_name = self.niiColorMapComboBox.currentText()
 
-        vmin = self.giiMinSpinBox.value()
-        vmax = self.giiMaxSpinBox.value()
+        vmin = self.niiMinSpinBox.value()
+        vmax = self.niiMaxSpinBox.value()
 
         # Protect against an invalid range
         if vmax <= vmin:
