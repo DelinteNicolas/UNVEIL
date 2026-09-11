@@ -201,7 +201,8 @@ class TrkViewer(QWidget):
                               'Greys', 'Purples', 'Blues', 'Greens', 'Oranges',
                               'Reds', 'bone', 'pink', 'spring', 'summer',
                               'autumn', 'winter', 'cool', 'Wistia', 'hot',
-                              'afmhot', 'gist_heat', 'copper', 'RdBu', 'RdYlBu',
+                              'afmhot', 'gist_heat', 'copper', 'YlOrRd', 'YlOrBr',
+                              'RdBu', 'RdYlBu',
                               'RdYlGn', 'Spectral', 'coolwarm', 'bwr', 'seismic',
                               'berlin', 'managua', 'vanimo', 'twilight',
                               'twilight_shifted', 'hsv', 'Pastel1', 'Pastel2',
@@ -328,6 +329,34 @@ class TrkViewer(QWidget):
         colormap_nii_row.addWidget(self.niiColorMapComboBox)
         nii_layout.addLayout(colormap_nii_row)
 
+        nii_range_layout = QHBoxLayout()
+
+        nii_min_layout = QVBoxLayout()
+        self.niiMinLabel = QLabel('Min:')
+        self.niiMinSpinBox = QDoubleSpinBox()
+        self.niiMinSpinBox.setDecimals(2)
+        self.niiMinSpinBox.setRange(-1e6, 1e6)
+        self.niiMinSpinBox.setSingleStep(0.1)
+        self.niiMinSpinBox.setValue(0.0)
+        self.niiMinSpinBox.editingFinished.connect(self.update_nii_viewer)
+        nii_min_layout.addWidget(self.niiMinLabel)
+        nii_min_layout.addWidget(self.niiMinSpinBox)
+
+        nii_max_layout = QVBoxLayout()
+        self.niiMaxLabel = QLabel('Max:')
+        self.niiMaxSpinBox = QDoubleSpinBox()
+        self.niiMaxSpinBox.setDecimals(2)
+        self.niiMaxSpinBox.setRange(-1e6, 1e6)
+        self.niiMaxSpinBox.setSingleStep(0.1)
+        self.niiMaxSpinBox.setValue(1.0)
+        self.niiMaxSpinBox.editingFinished.connect(self.update_nii_viewer)
+        nii_max_layout.addWidget(self.niiMaxLabel)
+        nii_max_layout.addWidget(self.niiMaxSpinBox)
+
+        nii_range_layout.addLayout(nii_min_layout)
+        nii_range_layout.addLayout(nii_max_layout)
+        nii_layout.addLayout(nii_range_layout)
+
         self.showSlicesCheckbox = QCheckBox('Show Slices')
         self.showSlicesCheckbox.stateChanged.connect(self.update_nii_viewer)
         nii_layout.addWidget(self.showSlicesCheckbox)
@@ -372,8 +401,8 @@ class TrkViewer(QWidget):
         control_layout.addWidget(nii_group)
 
         # Gifti
-        surface_group = QGroupBox("GIFTI / Surface")
-        gii_layout = QVBoxLayout(surface_group)
+        gii_group = QGroupBox("GIFTI / Surface")
+        gii_layout = QVBoxLayout(gii_group)
 
         opacity_gii_row = QHBoxLayout()
         opacity_gii_row.setSpacing(5)
@@ -389,55 +418,56 @@ class TrkViewer(QWidget):
 
         color_mode_gii_row = QHBoxLayout()
         color_mode_gii_row.setSpacing(5)
-        self.surfaceColorModeLabel = QLabel('Color Mode:')
-        color_mode_gii_row.addWidget(self.surfaceColorModeLabel)
-        self.surfaceColorModeComboBox = QComboBox()
-        self.surfaceColorModeComboBox.addItems(['Solid', 'NIfTI values'])
-        self.surfaceColorModeComboBox.currentIndexChanged.connect(
+        self.giiColorModeLabel = QLabel('Color Mode:')
+        color_mode_gii_row.addWidget(self.giiColorModeLabel)
+        self.giiColorModeComboBox = QComboBox()
+        self.giiColorModeComboBox.addItems(['Solid', 'NIfTI values'])
+        self.giiColorModeComboBox.currentIndexChanged.connect(
             self.update_gii_viewer)
-        color_mode_gii_row.addWidget(self.surfaceColorModeComboBox)
+        color_mode_gii_row.addWidget(self.giiColorModeComboBox)
         gii_layout.addLayout(color_mode_gii_row)
 
         colormap_gii_row = QHBoxLayout()
         colormap_gii_row.setSpacing(5)
-        self.surfaceColorMapLabel = QLabel('Colormap:')
-        colormap_gii_row.addWidget(self.surfaceColorMapLabel)
-        self.surfaceColorMapComboBox = QComboBox()
-        self.surfaceColorMapComboBox.addItems(self.colormap_list)
-        self.surfaceColorMapComboBox.setCurrentText('viridis')
-        self.surfaceColorMapComboBox.currentIndexChanged.connect(
+        self.giiColorMapLabel = QLabel('Colormap:')
+        colormap_gii_row.addWidget(self.giiColorMapLabel)
+        self.giiColorMapComboBox = QComboBox()
+        self.giiColorMapComboBox.addItems(self.colormap_list)
+        self.giiColorMapComboBox.setCurrentText('viridis')
+        self.giiColorMapComboBox.currentIndexChanged.connect(
             self.update_gii_viewer)
-        colormap_gii_row.addWidget(self.surfaceColorMapComboBox)
+        colormap_gii_row.addWidget(self.giiColorMapComboBox)
         gii_layout.addLayout(colormap_gii_row)
 
-        range_layout = QHBoxLayout()
+        gii_range_layout = QHBoxLayout()
 
-        min_layout = QVBoxLayout()
-        self.surfaceMinLabel = QLabel('Min:')
-        self.surfaceMinSpinBox = QDoubleSpinBox()
-        self.surfaceMinSpinBox.setDecimals(2)
-        self.surfaceMinSpinBox.setRange(-1e6, 1e6)
-        self.surfaceMinSpinBox.setSingleStep(0.1)
-        self.surfaceMinSpinBox.setValue(0.0)
-        self.surfaceMinSpinBox.editingFinished.connect(self.update_gii_viewer)
-        min_layout.addWidget(self.surfaceMinLabel)
-        min_layout.addWidget(self.surfaceMinSpinBox)
+        gii_min_layout = QVBoxLayout()
+        self.giiMinLabel = QLabel('Min:')
+        self.giiMinSpinBox = QDoubleSpinBox()
+        self.giiMinSpinBox.setDecimals(2)
+        self.giiMinSpinBox.setRange(-1e6, 1e6)
+        self.giiMinSpinBox.setSingleStep(0.1)
+        self.giiMinSpinBox.setValue(0.0)
+        self.giiMinSpinBox.editingFinished.connect(self.update_gii_viewer)
+        gii_min_layout.addWidget(self.giiMinLabel)
+        gii_min_layout.addWidget(self.giiMinSpinBox)
 
-        max_layout = QVBoxLayout()
-        self.surfaceMaxLabel = QLabel('Max:')
-        self.surfaceMaxSpinBox = QDoubleSpinBox()
-        self.surfaceMaxSpinBox.setDecimals(2)
-        self.surfaceMaxSpinBox.setRange(-1e6, 1e6)
-        self.surfaceMaxSpinBox.setSingleStep(0.1)
-        self.surfaceMaxSpinBox.setValue(1.0)
-        self.surfaceMaxSpinBox.editingFinished.connect(self.update_gii_viewer)
-        max_layout.addWidget(self.surfaceMaxLabel)
-        max_layout.addWidget(self.surfaceMaxSpinBox)
+        gii_max_layout = QVBoxLayout()
+        self.giiMaxLabel = QLabel('Max:')
+        self.giiMaxSpinBox = QDoubleSpinBox()
+        self.giiMaxSpinBox.setDecimals(2)
+        self.giiMaxSpinBox.setRange(-1e6, 1e6)
+        self.giiMaxSpinBox.setSingleStep(0.1)
+        self.giiMaxSpinBox.setValue(1.0)
+        self.giiMaxSpinBox.editingFinished.connect(self.update_gii_viewer)
+        gii_max_layout.addWidget(self.giiMaxLabel)
+        gii_max_layout.addWidget(self.giiMaxSpinBox)
 
-        range_layout.addLayout(min_layout)
-        range_layout.addLayout(max_layout)
-        gii_layout.addLayout(range_layout)
-        control_layout.addWidget(surface_group)
+        gii_range_layout.addLayout(gii_min_layout)
+        gii_range_layout.addLayout(gii_max_layout)
+        gii_layout.addLayout(gii_range_layout)
+
+        control_layout.addWidget(gii_group)
 
         self.update_surface_color_controls()
 
@@ -476,6 +506,7 @@ class TrkViewer(QWidget):
             self.nii_affine = img.affine
             self.nii_data = img.get_fdata()
 
+            self.update_volume_color_range_from_nifti()
             self.update_surface_color_range_from_nifti()
 
             grid = pv.ImageData()
@@ -691,9 +722,16 @@ class TrkViewer(QWidget):
         opacity = self.nii_opacitySlider.value()/1000
         cmap_name = self.niiColorMapComboBox.currentText()
 
+        vmin = self.giiMinSpinBox.value()
+        vmax = self.giiMaxSpinBox.value()
+
+        # Protect against an invalid range
+        if vmax <= vmin:
+            vmax = vmin + 1e-6
+
         self.plotter.add_volume(self.grid, cmap=cmap_name, opacity=[0, opacity],
                                 show_scalar_bar=False, name='nii_volume',
-                                reset_camera=reset_camera,
+                                reset_camera=reset_camera, clim=[vmin, vmax],
                                 user_matrix=self.nii_affine)
 
     def update_gii_viewer(self, reset_camera=False):
@@ -706,7 +744,7 @@ class TrkViewer(QWidget):
 
         opacity = self.gii_opacitySlider.value() / 100.0
 
-        color_mode = self.surfaceColorModeComboBox.currentText()
+        color_mode = self.giiColorModeComboBox.currentText()
 
         # Remove the existing surface before adding the updated version.
         if "gii_surface" in self.plotter.actors:
@@ -759,10 +797,10 @@ class TrkViewer(QWidget):
             surface_mesh = self.gii_mesh.copy(deep=True)
             surface_mesh.point_data["NIfTI values"] = scalars
 
-            cmap_name = self.surfaceColorMapComboBox.currentText()
+            cmap_name = self.giiColorMapComboBox.currentText()
 
-            vmin = self.surfaceMinSpinBox.value()
-            vmax = self.surfaceMaxSpinBox.value()
+            vmin = self.giiMinSpinBox.value()
+            vmax = self.giiMaxSpinBox.value()
 
             # Protect against an invalid range
             if vmax <= vmin:
@@ -786,6 +824,36 @@ class TrkViewer(QWidget):
 
         self.plotter.render()
 
+    def update_volume_color_range_from_nifti(self):
+
+        if self.nii_data is None:
+            return
+
+        data = np.asarray(self.nii_data, dtype=float)
+        finite = np.isfinite(data)
+
+        if not np.any(finite):
+            return
+
+        values = data[finite]
+
+        vmin = float(np.min(values))
+        vmax = float(np.max(values))
+
+        # Avoid identical limits because PyVista/VTK does not like
+        # clim=[x, x].
+        if np.isclose(vmin, vmax):
+            vmax = vmin + 1.0
+
+        self.niiMinSpinBox.blockSignals(True)
+        self.niiMaxSpinBox.blockSignals(True)
+
+        self.niiMinSpinBox.setValue(vmin)
+        self.niiMaxSpinBox.setValue(vmax)
+
+        self.niiMinSpinBox.blockSignals(False)
+        self.niiMaxSpinBox.blockSignals(False)
+
     def update_surface_color_range_from_nifti(self):
 
         if self.nii_data is None:
@@ -807,14 +875,14 @@ class TrkViewer(QWidget):
         if np.isclose(vmin, vmax):
             vmax = vmin + 1.0
 
-        self.surfaceMinSpinBox.blockSignals(True)
-        self.surfaceMaxSpinBox.blockSignals(True)
+        self.giiMinSpinBox.blockSignals(True)
+        self.giiMaxSpinBox.blockSignals(True)
 
-        self.surfaceMinSpinBox.setValue(vmin)
-        self.surfaceMaxSpinBox.setValue(vmax)
+        self.giiMinSpinBox.setValue(vmin)
+        self.giiMaxSpinBox.setValue(vmax)
 
-        self.surfaceMinSpinBox.blockSignals(False)
-        self.surfaceMaxSpinBox.blockSignals(False)
+        self.giiMinSpinBox.blockSignals(False)
+        self.giiMaxSpinBox.blockSignals(False)
 
     def sample_nifti_on_surface(self, mesh):
         """
@@ -955,17 +1023,17 @@ class TrkViewer(QWidget):
     def update_surface_color_controls(self):
         """Enable surface scalar controls only when using NIfTI values."""
 
-        use_nifti = (self.surfaceColorModeComboBox.currentText()
+        use_nifti = (self.giiColorModeComboBox.currentText()
                      == "NIfTI values")
 
-        self.surfaceColorMapLabel.setEnabled(use_nifti)
-        self.surfaceColorMapComboBox.setEnabled(use_nifti)
+        self.giiColorMapLabel.setEnabled(use_nifti)
+        self.giiColorMapComboBox.setEnabled(use_nifti)
 
-        self.surfaceMinLabel.setEnabled(use_nifti)
-        self.surfaceMinSpinBox.setEnabled(use_nifti)
+        self.giiMinLabel.setEnabled(use_nifti)
+        self.giiMinSpinBox.setEnabled(use_nifti)
 
-        self.surfaceMaxLabel.setEnabled(use_nifti)
-        self.surfaceMaxSpinBox.setEnabled(use_nifti)
+        self.giiMaxLabel.setEnabled(use_nifti)
+        self.giiMaxSpinBox.setEnabled(use_nifti)
 
 
 class OrthogonalViewer(QWidget):
