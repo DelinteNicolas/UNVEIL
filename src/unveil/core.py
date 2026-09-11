@@ -752,45 +752,22 @@ class TrkViewer(QWidget):
 
         color_mode = self.giiColorModeComboBox.currentText()
 
-        # # Remove the existing surface before adding the updated version.
-        # if "gii_surface" in self.plotter.actors:
-        #     self.plotter.remove_actor("gii_surface")
-
-        # --------------------------------------------------------------
-        # Solid color
-        # --------------------------------------------------------------
         if color_mode == "Solid":
 
-            self.plotter.add_mesh(
-                self.gii_mesh,
-                color="ghostwhite",
-                culling="back",
-                smooth_shading=True,
-                opacity=opacity,
-                name="gii_surface",
-                reset_camera=reset_camera,
-                point_size=0,
-                render_lines_as_tubes=True,
-            )
+            self.plotter.add_mesh(self.gii_mesh, color="ghostwhite",
+                                  culling="back", smooth_shading=True,
+                                  opacity=opacity, name="gii_surface",
+                                  reset_camera=reset_camera,
+                                  point_size=0, render_lines_as_tubes=True)
 
-        # --------------------------------------------------------------
-        # Color according to NIfTI
-        # --------------------------------------------------------------
         elif color_mode == "NIfTI values":
 
             if self.nii_data is None:
-                # No NIfTI loaded: fall back to solid color
-                self.plotter.add_mesh(
-                    self.gii_mesh,
-                    color="ghostwhite",
-                    culling="back",
-                    smooth_shading=True,
-                    opacity=opacity,
-                    name="gii_surface",
-                    reset_camera=reset_camera,
-                    point_size=0,
-                    render_lines_as_tubes=True,
-                )
+                self.plotter.add_mesh(self.gii_mesh, color="ghostwhite",
+                                      culling="back", smooth_shading=True,
+                                      opacity=opacity, name="gii_surface",
+                                      reset_camera=reset_camera,
+                                      point_size=0, render_lines_as_tubes=True)
                 return
 
             # Sample NIfTI values at each surface vertex
@@ -812,21 +789,13 @@ class TrkViewer(QWidget):
             if vmax <= vmin:
                 vmax = vmin + 1e-6
 
-            self.plotter.add_mesh(
-                surface_mesh,
-                scalars="NIfTI values",
-                cmap=cmap_name,
-                clim=[vmin, vmax],
-                culling="back",
-                # nan_color="red",
-                smooth_shading=True,
-                opacity=opacity,
-                name="gii_surface",
-                reset_camera=reset_camera,
-                point_size=0,
-                render_lines_as_tubes=True,
-                show_scalar_bar=False,
-            )
+            self.plotter.add_mesh(surface_mesh, scalars="NIfTI values",
+                                  cmap=cmap_name, clim=[vmin, vmax],
+                                  culling="back", smooth_shading=True,
+                                  opacity=opacity, name="gii_surface",
+                                  reset_camera=reset_camera, point_size=0,
+                                  render_lines_as_tubes=True,
+                                  show_scalar_bar=False)
 
         self.plotter.render()
 
