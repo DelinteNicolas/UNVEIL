@@ -18,7 +18,8 @@ classifiers = ['Intended Audience :: Science/Research',
 dependencies = ['dipy',
                 'pyvista',
                 'pyvistaqt',
-                'PyQt6'
+                'PyQt6',
+                'binama'
 ]
 dynamic = ["version"]
 
