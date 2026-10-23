@@ -194,10 +194,15 @@ def load_gii_data(gii_path):
     gii_img = nib.load(gii_path)
     vertex_coords = gii_img.get_arrays_from_intent("NIFTI_INTENT_POINTSET")[0].data
     gii_data = {}
+
+    # Iterate over all tables of the GIfTI
     for darray in gii_img.darrays:
-            if darray.meta.get("Name") is not None:
-                if darray.data.shape == vertex_coords[:,0].shape:
-                    gii_data[darray.meta.get("Name")] =  darray.data
+        # Vertex coords and triangles are stored with None as 'Name'
+        if darray.meta.get("Name") is not None:
+            # Check that the table contains 1 value per vertex
+            if darray.data.shape == vertex_coords[:,0].shape:
+                gii_data[darray.meta.get("Name")] =  darray.data
+
     return gii_data
 
 class TrkViewer(QWidget):
@@ -513,19 +518,21 @@ class TrkViewer(QWidget):
         options = QFileDialog.Options()
         filePath, _ = QFileDialog.getOpenFileName(
             self, "Open .nii.gz File", "", "Nifti Files (*.nii.gz)", options=options)
-        if filePath:
-            print(f"Loaded NIfTI file: {filePath}")
-            img = nib.load(filePath)
-            self.nii_affine = img.affine
-            self.nii_data = img.get_fdata()
+        
+        if not filePath:
+            return
+        
+        print(f"Loaded NIfTI file: {filePath}")
+        img = nib.load(filePath)
+        self.nii_affine = img.affine
+        self.nii_data = img.get_fdata()
 
-            self.update_volume_color_range_from_nifti()
-            #self.update_surface_color_range(self.nii_data)
+        self.update_volume_color_range_from_nifti()
 
-            grid = pv.ImageData()
-            grid.dimensions = np.array(self.nii_data.shape) + 1
-            grid.cell_data['values'] = self.nii_data.flatten(order='F')
-            self.grid = grid
+        grid = pv.ImageData()
+        grid.dimensions = np.array(self.nii_data.shape) + 1
+        grid.cell_data['values'] = self.nii_data.flatten(order='F')
+        self.grid = grid
 
         self.XSlider.setMaximum(self.nii_data.shape[0])
         self.YSlider.setMaximum(self.nii_data.shape[1])
@@ -597,14 +604,8 @@ class TrkViewer(QWidget):
 
     def loadGiftiFile(self):
         options = QFileDialog.Options()
-
         filePath, _ = QFileDialog.getOpenFileName(
-            self,
-            "Open .gii File",
-            "",
-            "Gifti Files (*.gii)",
-            options=options
-        )
+            self, "Open .gii File", "", "Gifti Files (*.gii)", options=options)
 
         if not filePath:
             return
@@ -889,37 +890,6 @@ class TrkViewer(QWidget):
 
         self.niiMinSpinBox.blockSignals(False)
         self.niiMaxSpinBox.blockSignals(False)
-
-    """def update_surface_color_range_from_nifti(self):
-
-        if self.nii_data is None:
-            return
-
-        data = np.asarray(self.nii_data, dtype=float)
-        finite = np.isfinite(data)
-
-        if not np.any(finite):
-            return
-
-        values = data[finite]
-
-        vmin = float(np.min(values))
-        vmax = float(np.max(values))
-
-        # Avoid identical limits because PyVista/VTK does not like
-        # clim=[x, x].
-        if np.isclose(vmin, vmax):
-            vmax = vmin + 1.0
-
-        self.giiMinSpinBox.blockSignals(True)
-        self.giiMaxSpinBox.blockSignals(True)
-
-        self.giiMinSpinBox.setValue(vmin)
-        self.giiMaxSpinBox.setValue(vmax)
-
-        self.giiMinSpinBox.blockSignals(False)
-        self.giiMaxSpinBox.blockSignals(False)"""
-
 
     def update_surface_color_range(self,data):
 
