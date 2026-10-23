@@ -441,7 +441,7 @@ class TrkViewer(QWidget):
         self.giiColorModeComboBox = QComboBox()
         self.giiColorModeComboBox.addItems(['Solid', 'NIfTI values'])
         self.giiColorModeComboBox.currentIndexChanged.connect(
-            lambda index: self.update_gii_viewer(update_surface_color_range=True))
+            lambda index: self.update_gii_viewer(update_color_range=True))
         color_mode_gii_row.addWidget(self.giiColorModeComboBox)
         gii_layout.addLayout(color_mode_gii_row)
 
@@ -625,6 +625,13 @@ class TrkViewer(QWidget):
         
         self.actor_types["gii_surface"] = "gii"
 
+        if hasattr(self, "nii_data"):
+            # Sample NIfTI values at each surface vertex
+            self.nii_surface_values = self.sample_nifti_on_surface(self.gii_mesh)
+            self.update_gii_viewer(reset_camera=False)
+        else:
+            self.nii_surface_values = None
+
         self.update_gii_viewer(reset_camera=False)
         self.window().refreshActorList()
 
@@ -770,7 +777,7 @@ class TrkViewer(QWidget):
                                 reset_camera=reset_camera, clim=[vmin, vmax],
                                 user_matrix=self.nii_affine)
 
-    def update_gii_viewer(self, reset_camera=False, update_surface_color_range = False):
+    def update_gii_viewer(self, reset_camera=False, update_color_range = False):
         """Update the GIFTI surface rendering."""
 
         if not hasattr(self, "gii_mesh"):
@@ -790,60 +797,28 @@ class TrkViewer(QWidget):
                                   reset_camera=reset_camera,
                                   point_size=0, render_lines_as_tubes=True)
 
-        elif color_mode == "NIfTI values":
-
-            if self.nii_data is None:
-                self.plotter.add_mesh(self.gii_mesh, color="ghostwhite",
-                                      culling="back", smooth_shading=True,
-                                      opacity=opacity, name="gii_surface",
-                                      reset_camera=reset_camera,
-                                      point_size=0, render_lines_as_tubes=True)
-                return
-
-            if self.nii_surface_values is None:
-                self.nii_surface_values = self.sample_nifti_on_surface(self.gii_mesh)
-            scalars = self.nii_surface_values 
-
-            if scalars is None:
-                return
-
-            # Copy the mesh so that the original GIFTI mesh is not modified
-            surface_mesh = self.gii_mesh.copy(deep=True)
-            surface_mesh.point_data["NIfTI values"] = scalars
-
-            cmap_name = self.giiColorMapComboBox.currentText()
-
-            if update_surface_color_range:
-                self.update_surface_color_range(self.nii_data)
-
-            vmin = self.giiMinSpinBox.value()
-            vmax = self.giiMaxSpinBox.value()
-
-            # Protect against an invalid range
-            if vmax <= vmin:
-                vmax = vmin + 1e-6
-
-            self.plotter.add_mesh(surface_mesh, scalars="NIfTI values",
-                                  cmap=cmap_name, clim=[vmin, vmax],
-                                  culling="back", smooth_shading=True,
-                                  opacity=opacity, name="gii_surface",
-                                  reset_camera=reset_camera, point_size=0,
-                                  render_lines_as_tubes=True,
-                                  show_scalar_bar=False)
         else:
-            scalars = self.gii_data[color_mode]
+            if color_mode == "NIfTI values":
+                scalars = self.nii_surface_values 
+            else:
+                scalars = self.gii_data[color_mode]
 
             if scalars is None:
+                self.plotter.add_mesh(self.gii_mesh, color="ghostwhite",
+                                        culling="back", smooth_shading=True,
+                                        opacity=opacity, name="gii_surface",
+                                        reset_camera=reset_camera,
+                                        point_size=0, render_lines_as_tubes=True)
                 return
-            
+
             # Copy the mesh so that the original GIFTI mesh is not modified
             surface_mesh = self.gii_mesh.copy(deep=True)
             surface_mesh.point_data[color_mode] = scalars
 
             cmap_name = self.giiColorMapComboBox.currentText()
 
-            if update_surface_color_range:
-                self.update_surface_color_range(self.gii_data[color_mode])
+            if update_color_range:
+                self.update_surface_color_range(scalars)
 
             vmin = self.giiMinSpinBox.value()
             vmax = self.giiMaxSpinBox.value()
@@ -859,6 +834,7 @@ class TrkViewer(QWidget):
                                     reset_camera=reset_camera, point_size=0,
                                     render_lines_as_tubes=True,
                                     show_scalar_bar=False)
+
         self.plotter.render()
 
     def update_volume_color_range_from_nifti(self):
