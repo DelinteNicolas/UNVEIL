@@ -12,7 +12,7 @@ from pyvistaqt import QtInteractor
 from PyQt6.QtCore import Qt
 from PyQt6.QtWidgets import (QApplication, QWidget, QHBoxLayout, QVBoxLayout,
                              QPushButton, QFileDialog, QCheckBox, QSlider,
-                             QLabel, QComboBox, QMainWindow, QLineEdit,
+                             QLabel, QComboBox, QMainWindow,
                              QDockWidget, QTreeWidget, QTreeWidgetItem,
                              QColorDialog, QTabWidget, QDoubleSpinBox,
                              QGroupBox)
@@ -23,7 +23,7 @@ from matplotlib.colors import LinearSegmentedColormap
 from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg
 from matplotlib.figure import Figure
 # from unravel.utils import get_streamline_density
-from binama.utils import dilate_atlas_labels
+from unveil.utils import dilate_atlas_labels
 
 
 def gifti_to_pyvista(gii_path):
@@ -186,13 +186,15 @@ def plot_trk(trk_file, scalar=None, color_map='plasma', opacity: float = 1,
 
     p.background_color = background
 
+
 def load_gii_data(gii_path):
     """
     Load all data contained in the GifTi file except vertex coordinates and triangles.
     Returns : dictionnary {"Gii table name" : data}
     """
     gii_img = nib.load(gii_path)
-    vertex_coords = gii_img.get_arrays_from_intent("NIFTI_INTENT_POINTSET")[0].data
+    vertex_coords = gii_img.get_arrays_from_intent(
+        "NIFTI_INTENT_POINTSET")[0].data
     gii_data = {}
 
     # Iterate over all tables of the GIfTI
@@ -200,10 +202,11 @@ def load_gii_data(gii_path):
         # Vertex coords and triangles are stored with None as 'Name'
         if darray.meta.get("Name") is not None:
             # Check that the table contains 1 value per vertex
-            if darray.data.shape == vertex_coords[:,0].shape:
-                gii_data[darray.meta.get("Name")] =  darray.data
+            if darray.data.shape == vertex_coords[:, 0].shape:
+                gii_data[darray.meta.get("Name")] = darray.data
 
     return gii_data
+
 
 class TrkViewer(QWidget):
     def __init__(self):
@@ -518,10 +521,10 @@ class TrkViewer(QWidget):
         options = QFileDialog.Options()
         filePath, _ = QFileDialog.getOpenFileName(
             self, "Open .nii.gz File", "", "Nifti Files (*.nii.gz)", options=options)
-        
+
         if not filePath:
             return
-        
+
         print(f"Loaded NIfTI file: {filePath}")
         img = nib.load(filePath)
         self.nii_affine = img.affine
@@ -544,11 +547,12 @@ class TrkViewer(QWidget):
         self.nii_data_dilated = dilate_atlas_labels(
             self.nii_data, dilation_width=4)
         self.nii_data_dilated = np.where(self.nii_data_dilated == 0, np.nan,
-                                            self.nii_data_dilated)
-        
+                                         self.nii_data_dilated)
+
         if hasattr(self, "gii_mesh"):
             # Sample NIfTI values at each surface vertex
-            self.nii_surface_values = self.sample_nifti_on_surface(self.gii_mesh)
+            self.nii_surface_values = self.sample_nifti_on_surface(
+                self.gii_mesh)
             self.update_gii_viewer(reset_camera=False)
         else:
             self.nii_surface_values = None
@@ -557,8 +561,6 @@ class TrkViewer(QWidget):
         # Update 2D view with current colormap
         ortho_data = self.nii_data.copy()
         ortho_data[ortho_data == 0] = None
-
-        
 
         self.window().ortho_viewer.set_volume(ortho_data, self.nii_affine)
         self.window().ortho_viewer.set_colormap(self.niiColorMapComboBox.currentText())
@@ -615,19 +617,20 @@ class TrkViewer(QWidget):
         self.gii_mesh = gifti_to_pyvista(filePath)
 
         self.gii_data = load_gii_data(filePath)
-        
+
         self.giiColorModeComboBox.setCurrentIndex(0)
-        
+
         for _ in range(self.giiColorModeComboBox.count()-2):
             self.giiColorModeComboBox.removeItem(2)
-            
+
         self.giiColorModeComboBox.addItems(list(self.gii_data.keys()))
-        
+
         self.actor_types["gii_surface"] = "gii"
 
         if hasattr(self, "nii_data"):
             # Sample NIfTI values at each surface vertex
-            self.nii_surface_values = self.sample_nifti_on_surface(self.gii_mesh)
+            self.nii_surface_values = self.sample_nifti_on_surface(
+                self.gii_mesh)
             self.update_gii_viewer(reset_camera=False)
         else:
             self.nii_surface_values = None
@@ -777,7 +780,7 @@ class TrkViewer(QWidget):
                                 reset_camera=reset_camera, clim=[vmin, vmax],
                                 user_matrix=self.nii_affine)
 
-    def update_gii_viewer(self, reset_camera=False, update_color_range = False):
+    def update_gii_viewer(self, reset_camera=False, update_color_range=False):
         """Update the GIFTI surface rendering."""
 
         if not hasattr(self, "gii_mesh"):
@@ -799,16 +802,16 @@ class TrkViewer(QWidget):
 
         else:
             if color_mode == "NIfTI values":
-                scalars = self.nii_surface_values 
+                scalars = self.nii_surface_values
             else:
                 scalars = self.gii_data[color_mode]
 
             if scalars is None:
                 self.plotter.add_mesh(self.gii_mesh, color="ghostwhite",
-                                        culling="back", smooth_shading=True,
-                                        opacity=opacity, name="gii_surface",
-                                        reset_camera=reset_camera,
-                                        point_size=0, render_lines_as_tubes=True)
+                                      culling="back", smooth_shading=True,
+                                      opacity=opacity, name="gii_surface",
+                                      reset_camera=reset_camera,
+                                      point_size=0, render_lines_as_tubes=True)
                 return
 
             # Copy the mesh so that the original GIFTI mesh is not modified
@@ -828,12 +831,12 @@ class TrkViewer(QWidget):
                 vmax = vmin + 1e-6
 
             self.plotter.add_mesh(surface_mesh, scalars=color_mode,
-                                    cmap=cmap_name, clim=[vmin, vmax],
-                                    culling="back", smooth_shading=True,
-                                    opacity=opacity, name="gii_surface",
-                                    reset_camera=reset_camera, point_size=0,
-                                    render_lines_as_tubes=True,
-                                    show_scalar_bar=False)
+                                  cmap=cmap_name, clim=[vmin, vmax],
+                                  culling="back", smooth_shading=True,
+                                  opacity=opacity, name="gii_surface",
+                                  reset_camera=reset_camera, point_size=0,
+                                  render_lines_as_tubes=True,
+                                  show_scalar_bar=False)
 
         self.plotter.render()
 
@@ -867,7 +870,7 @@ class TrkViewer(QWidget):
         self.niiMinSpinBox.blockSignals(False)
         self.niiMaxSpinBox.blockSignals(False)
 
-    def update_surface_color_range(self,data):
+    def update_surface_color_range(self, data):
 
         if data is None:
             return

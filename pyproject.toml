@@ -19,7 +19,6 @@ dependencies = ['dipy',
                 'pyvista',
                 'pyvistaqt',
                 'PyQt6',
-                'binama'
 ]
 dynamic = ["version"]
 
