@@ -9,8 +9,7 @@ import numpy as np
 from scipy.ndimage import distance_transform_edt
 
 
-def dilate_atlas_labels(atlas, brain_mask=None, dilation_width: float = 1,
-                        min_label: int = 0):
+def dilate_atlas_labels(atlas, brain_mask=None, dilation_width: float = 1):
     """
     Dilates cortical atlas labels to include nearby unlabeled voxels (0),
     constrained by a brain mask.
@@ -24,8 +23,6 @@ def dilate_atlas_labels(atlas, brain_mask=None, dilation_width: float = 1,
         Binary mask of the brain (same shape as atlas). The default is one
     dilation_width : float, optional
         Maximum dilation distance in voxels. The default is None.
-    min_label : int, optional
-        Labels below this values are not dilated
 
     Returns
     -------
@@ -34,7 +31,7 @@ def dilate_atlas_labels(atlas, brain_mask=None, dilation_width: float = 1,
     """
 
     # Mask unlabeled voxels inside the brain
-    unlabeled = np.where(atlas <= min_label, 1, 0)
+    unlabeled = np.where(atlas != 0, 1, 0)
     if brain_mask is not None:
         unlabeled *= brain_mask.astype('int32')
 
