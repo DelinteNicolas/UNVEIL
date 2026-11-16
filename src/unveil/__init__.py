@@ -1,5 +1,5 @@
 """
 This package contains an UNVEIL, a lightweight tractography viewer implemented in python."""
 
-__version__ = "0.7.3"
+__version__ = "0.7.4"
 __author__ = 'Nicolas Delinte'
