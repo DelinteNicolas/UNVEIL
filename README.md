@@ -17,6 +17,8 @@ import unveil.__main__
 ```
 or with
 ```
+python -m unveil
+OR
 python -c "import unveil.__main__"
 ```
 from a terminal with a python environment activated.

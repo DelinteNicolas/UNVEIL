@@ -239,7 +239,9 @@ class TrkViewer(QWidget):
         self.flicker = False
         self.roi_colors = {}
         self.roi_volumes = {}
-        self.roi_visibility = {}
+        self.visibility = {}
+        self.gii_meshes = {}
+        self.nii_surface_values = {}
 
     def initUI(self):
         # Create the main layout
@@ -525,6 +527,14 @@ class TrkViewer(QWidget):
         if not filePath:
             return
 
+        # Remove previous
+        for nii_actor in list(self.actor_types):
+            if self.actor_types.get(nii_actor) == 'nii':
+                del self.actor_types[nii_actor]
+
+        actor_name = f"{filePath.split('/')[-1]}"
+        self.actor_types[actor_name] = "nii"
+
         print(f"Loaded NIfTI file: {filePath}")
         img = nib.load(filePath)
         self.nii_affine = img.affine
@@ -551,11 +561,12 @@ class TrkViewer(QWidget):
 
         if hasattr(self, "gii_mesh"):
             # Sample NIfTI values at each surface vertex
-            self.nii_surface_values = self.sample_nifti_on_surface(
-                self.gii_mesh)
+            for gii_actor in list(self.actor_types):
+                if self.actor_types.get(gii_actor) != 'gii':
+                    continue
+                self.nii_surface_values[gii_actor] = self.sample_nifti_on_surface(
+                    self.gii_meshes[gii_actor])
             self.update_gii_viewer(reset_camera=False)
-        else:
-            self.nii_surface_values = None
         self.window().refreshActorList()
 
         # Update 2D view with current colormap
@@ -589,7 +600,7 @@ class TrkViewer(QWidget):
             actor_name = f"{roi_path.split('/')[-1]}"
             self.actor_types[actor_name] = "roi"
             self.roi_volumes[actor_name] = roi
-            self.roi_visibility[actor_name] = True
+            self.visibility[actor_name] = True
 
             default_color = np.array([1.0, 1.0, 1.0])
 
@@ -605,35 +616,40 @@ class TrkViewer(QWidget):
             self.window().ortho_viewer.add_roi(actor_name, roi, default_color)
 
     def loadGiftiFile(self):
-        options = QFileDialog.Options()
-        filePath, _ = QFileDialog.getOpenFileName(
-            self, "Open .gii File", "", "Gifti Files (*.gii)", options=options)
 
-        if not filePath:
+        options = QFileDialog.Options()
+        filePaths, _ = QFileDialog.getOpenFileNames(
+            self, "Open .gii Files", "", "Gifti Files (*.gii)", options=options)
+
+        if not filePaths:
             return
 
-        print(f"Loaded GIFTI file: {filePath}")
+        for gii_path in filePaths:
+            print(f"Loaded Gifti file: {gii_path}")
+            actor_name = f"{gii_path.split('/')[-1]}"
+            self.actor_types[actor_name] = 'gii'
+            self.visibility[actor_name] = True
 
-        self.gii_mesh = gifti_to_pyvista(filePath)
+            self.gii_meshes[actor_name] = gifti_to_pyvista(gii_path)
 
-        self.gii_data = load_gii_data(filePath)
+            self.gii_data = load_gii_data(gii_path)
 
-        self.giiColorModeComboBox.setCurrentIndex(0)
+            self.giiColorModeComboBox.setCurrentIndex(0)
 
-        for _ in range(self.giiColorModeComboBox.count()-2):
-            self.giiColorModeComboBox.removeItem(2)
+            for _ in range(self.giiColorModeComboBox.count()-2):
+                self.giiColorModeComboBox.removeItem(2)
 
-        self.giiColorModeComboBox.addItems(list(self.gii_data.keys()))
+            self.giiColorModeComboBox.addItems(list(self.gii_data.keys()))
 
-        self.actor_types["gii_surface"] = "gii"
+            if hasattr(self, "nii_data"):
+                # Sample NIfTI values at each surface vertex
+                self.nii_surface_values[actor_name] = self.sample_nifti_on_surface(
+                    self.gii_meshes[actor_name])
+                # self.update_gii_viewer(reset_camera=False)
+            else:
+                self.nii_surface_values[actor_name] = None
 
-        if hasattr(self, "nii_data"):
-            # Sample NIfTI values at each surface vertex
-            self.nii_surface_values = self.sample_nifti_on_surface(
-                self.gii_mesh)
-            self.update_gii_viewer(reset_camera=False)
-        else:
-            self.nii_surface_values = None
+        self.gii_mesh = True
 
         self.update_gii_viewer(reset_camera=False)
         self.window().refreshActorList()
@@ -775,9 +791,14 @@ class TrkViewer(QWidget):
         if vmax <= vmin:
             vmax = vmin + 1e-6
 
-        self.plotter.add_volume(self.grid, cmap=cmap_name, opacity=[0, opacity],
-                                show_scalar_bar=False, name='nii_volume',
-                                reset_camera=reset_camera, clim=[vmin, vmax],
+        for nii_actor in list(self.actor_types):
+            if self.actor_types.get(nii_actor) == 'nii':
+                last_nii_actor = nii_actor
+
+        self.plotter.add_volume(self.grid, cmap=cmap_name,
+                                opacity=[0, opacity], show_scalar_bar=False,
+                                name=last_nii_actor, reset_camera=reset_camera,
+                                clim=[vmin, vmax],
                                 user_matrix=self.nii_affine)
 
     def update_gii_viewer(self, reset_camera=False, update_color_range=False):
@@ -792,51 +813,61 @@ class TrkViewer(QWidget):
 
         color_mode = self.giiColorModeComboBox.currentText()
 
-        if color_mode == "Solid":
+        for gii_actor in list(self.actor_types):
+            if self.actor_types.get(gii_actor) != 'gii':
+                continue
+            if not self.visibility[gii_actor]:
+                continue
 
-            self.plotter.add_mesh(self.gii_mesh, color="ghostwhite",
-                                  culling="back", smooth_shading=True,
-                                  opacity=opacity, name="gii_surface",
-                                  reset_camera=reset_camera,
-                                  point_size=0, render_lines_as_tubes=True)
+            if color_mode == "Solid":
 
-        else:
-            if color_mode == "NIfTI values":
-                scalars = self.nii_surface_values
-            else:
-                scalars = self.gii_data[color_mode]
-
-            if scalars is None:
-                self.plotter.add_mesh(self.gii_mesh, color="ghostwhite",
+                self.plotter.add_mesh(self.gii_meshes[gii_actor], color="ghostwhite",
                                       culling="back", smooth_shading=True,
-                                      opacity=opacity, name="gii_surface",
+                                      opacity=opacity, name=gii_actor,
                                       reset_camera=reset_camera,
                                       point_size=0, render_lines_as_tubes=True)
-                return
 
-            # Copy the mesh so that the original GIFTI mesh is not modified
-            surface_mesh = self.gii_mesh.copy(deep=True)
-            surface_mesh.point_data[color_mode] = scalars
+            else:
+                if color_mode == "NIfTI values":
+                    scalars = self.nii_surface_values[gii_actor]
+                else:
+                    scalars = self.gii_data[color_mode]
 
-            cmap_name = self.giiColorMapComboBox.currentText()
+                if scalars is None:
+                    self.plotter.add_mesh(self.gii_meshes[gii_actor], color="ghostwhite",
+                                          culling="back", smooth_shading=True,
+                                          opacity=opacity, name=gii_actor,
+                                          reset_camera=reset_camera,
+                                          point_size=0, render_lines_as_tubes=True)
+                    return
 
-            if update_color_range:
-                self.update_surface_color_range(scalars)
+                # Copy the mesh so that the original GIFTI mesh is not modified
+                surface_mesh = self.gii_meshes[gii_actor].copy(deep=True)
+                surface_mesh.point_data[color_mode] = scalars
 
-            vmin = self.giiMinSpinBox.value()
-            vmax = self.giiMaxSpinBox.value()
+                cmap_name = self.giiColorMapComboBox.currentText()
 
-            # Protect against an invalid range
-            if vmax <= vmin:
-                vmax = vmin + 1e-6
+                if update_color_range:
+                    if color_mode == "NIfTI values":
+                        self.update_surface_color_range(self.nii_data)
+                    else:
+                        self.update_surface_color_range(
+                            self.gii_data[color_mode])
 
-            self.plotter.add_mesh(surface_mesh, scalars=color_mode,
-                                  cmap=cmap_name, clim=[vmin, vmax],
-                                  culling="back", smooth_shading=True,
-                                  opacity=opacity, name="gii_surface",
-                                  reset_camera=reset_camera, point_size=0,
-                                  render_lines_as_tubes=True,
-                                  show_scalar_bar=False)
+                vmin = self.giiMinSpinBox.value()
+                vmax = self.giiMaxSpinBox.value()
+
+                # Protect against an invalid range
+                if vmax <= vmin:
+                    vmax = vmin + 1e-6
+
+                self.plotter.add_mesh(surface_mesh, scalars=color_mode,
+                                      cmap=cmap_name, clim=[vmin, vmax],
+                                      culling="back", smooth_shading=True,
+                                      opacity=opacity, name=gii_actor,
+                                      reset_camera=reset_camera, point_size=0,
+                                      render_lines_as_tubes=True,
+                                      show_scalar_bar=False)
 
         self.plotter.render()
 
@@ -1060,7 +1091,7 @@ class OrthogonalViewer(QWidget):
         self.cmap = "gray"
 
         self.rois = {}
-        self.roi_visibility = {}
+        self.visibility = {}
 
         self.background = "white"
 
@@ -1110,7 +1141,7 @@ class OrthogonalViewer(QWidget):
     def add_roi(self, name, roi, color):
 
         self.rois[name] = {"data": roi, "color": color}
-        self.roi_visibility[name] = True
+        self.visibility[name] = True
         self.update_views()
 
     def draw_roi(self, ax, roi_slice, color):
@@ -1149,7 +1180,7 @@ class OrthogonalViewer(QWidget):
 
         for name, roi_info in self.rois.items():
 
-            if not self.roi_visibility[name]:
+            if not self.visibility[name]:
                 continue
 
             roi = roi_info["data"]
@@ -1371,9 +1402,9 @@ class MainWindow(QMainWindow):
             # Insert into the correct group
             if self.viewer.actor_types.get(name) == 'trk':
                 group_trk.addChild(item)
-            elif name.startswith("nii_"):
+            elif self.viewer.actor_types.get(name) == 'nii':
                 group_nii.addChild(item)
-            elif name.startswith("gii_"):
+            elif self.viewer.actor_types.get(name) == 'gii':
                 group_gii.addChild(item)
             elif self.viewer.actor_types.get(name) == 'roi':
                 group_roi.addChild(item)
@@ -1395,8 +1426,8 @@ class MainWindow(QMainWindow):
         except KeyError:
             pass
 
-        self.viewer.roi_visibility[actor_name] = visible
-        self.ortho_viewer.roi_visibility[actor_name] = visible
+        self.viewer.visibility[actor_name] = visible
+        self.ortho_viewer.visibility[actor_name] = visible
         self.ortho_viewer.update_views()
 
         self.viewer.plotter.render()
