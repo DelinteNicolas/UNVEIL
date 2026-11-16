@@ -12,11 +12,11 @@ UNVEIL is a Python-based visualization tool for interactive exploration of diffu
 
 The GUI is launched with the following python command in a python console:
 
-```
+```python
 import unveil.__main__
 ```
 or with
-```
+```cmd
 python -m unveil
 OR
 python -c "import unveil.__main__"
